@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D-MORPH</title>
+<meta name="description" content="D-MORPH: decentralised, plasticity-guided coordination for heterogeneous multi-robot task allocation. Figures, videos and results.">
+<style>
+  :root { --bg:#fbfaf7; --fg:#2b2a27; --muted:#6c6a64; --line:#e3e1da; --card:#ffffff; --accent:#971F30; --link:#1f5696; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#181816; --fg:#e8e6e0; --muted:#a19e96; --line:#34332f; --card:#22211e; --accent:#e06a7a; --link:#7fb0ea; }
+  }
+  :root[data-theme="dark"] { --bg:#181816; --fg:#e8e6e0; --muted:#a19e96; --line:#34332f; --card:#22211e; --accent:#e06a7a; --link:#7fb0ea; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:980px; margin:0 auto; padding:40px 16px 72px; }
+  h1 { font-size:2rem; line-height:1.25; margin:0 0 8px; }
+  h2 { font-size:1.35rem; margin:48px 0 12px; padding-top:8px; border-top:1px solid var(--line); }
+  h3 { font-size:1.05rem; margin:28px 0 8px; }
+  p, li { max-width:72ch; }
+  a { color:var(--link); }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .nav { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:.95rem; margin:16px 0 8px; }
+  figure { margin:20px 0; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  figure img, figure video { width:100%; height:auto; display:block; border-radius:4px; background:#fff; }
+  figcaption { color:var(--muted); font-size:.92rem; margin-top:8px; }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; }
+  @media (max-width:700px) { .grid { grid-template-columns:1fr; } }
+  .grid figure { margin:0; }
+  table { border-collapse:collapse; width:100%; font-size:.93rem; margin:12px 0; }
+  th, td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); }
+  th { font-weight:600; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .wrap { overflow-x:auto; }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:12px 14px; overflow-x:auto; font-size:.88rem; line-height:1.45; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.92em; }
+  .key { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin:20px 0; }
+  @media (max-width:700px) { .key { grid-template-columns:1fr; } }
+  .key div { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .key b { display:block; font-size:1.35rem; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .key span { color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>D-MORPH: decentralised self-organising multi-robot task allocation via neuroplasticity-inspired adaptive topology</h1>
+  <p class="sub">Xuezhi Niu and Didem Gürdür Broo &middot; code: <a href="../README.md">README</a> &middot; all numbers: <a href="results.md">results.md</a></p>
+  <nav class="nav">
+    <a href="#videos">Videos</a><a href="#method">Method</a><a href="#scale">Scale study</a><a href="#ablation">Ablations</a>
+    <a href="#shift">Package location shift</a><a href="#emergent">Emergent structure</a><a href="#reproduce">Reproduce</a><a href="#cite">Cite</a>
+  </nav>
+
+  <p>Each robot in a heterogeneous team keeps its own directed partner preferences and links and updates them online
+  with four plasticity rules (synaptic, homeostatic, structural and metaplastic) from its own observations: its target,
+  the robot it is co-assigned with, and the completion of their joint mission. D-MORPH needs no task model, no bid
+  computation, no message exchange and no offline training. It is evaluated on the TA-RWARE robotic warehouse with
+  8 to 24 robots.</p>
+
+  <div class="key">
+    <div><b>102–108%</b><span>of the throughput of a fully connected team, at four fleet sizes</span></div>
+    <div><b>9–23%</b><span>of the possible robot pairs linked; the share falls as the fleet grows</span></div>
+    <div><b>−0.12 / −1.40</b><span>deliveries per phase lost between repeated demand phases (Medium / Large), the least of all methods</span></div>
+  </div>
+
+  <h2 id="videos">Supplementary Videos 1–4</h2>
+  <p>One episode (800 steps, seed 42) at each fleet size. Blue hexagons: AGVs; orange diamonds: Pickers; orange outlines:
+  requested shelves; grey squares at the bottom: delivery stations. Green lines are established links (older than the
+  20-step grace period); red dashed lines are candidate links. The strip below shows cumulative deliveries and active links.</p>
+  <div class="grid">
+    <figure><video controls muted loop playsinline preload="metadata" poster="videos/supp_video_1_tiny.gif"><source src="videos/supp_video_1_tiny.mp4" type="video/mp4"></video>
+      <figcaption>Video 1: Tiny, 5 AGVs + 3 Pickers (<a href="videos/supp_video_1_tiny.gif">GIF</a>)</figcaption></figure>
+    <figure><video controls muted loop playsinline preload="metadata" poster="videos/supp_video_2_small.gif"><source src="videos/supp_video_2_small.mp4" type="video/mp4"></video>
+      <figcaption>Video 2: Small, 8 AGVs + 4 Pickers (<a href="videos/supp_video_2_small.gif">GIF</a>)</figcaption></figure>
+    <figure><video controls muted loop playsinline preload="metadata" poster="videos/supp_video_3_medium.gif"><source src="videos/supp_video_3_medium.mp4" type="video/mp4"></video>
+      <figcaption>Video 3: Medium, 12 AGVs + 6 Pickers (<a href="videos/supp_video_3_medium.gif">GIF</a>)</figcaption></figure>
+    <figure><video controls muted loop playsinline preload="metadata" poster="videos/supp_video_4_large.gif"><source src="videos/supp_video_4_large.mp4" type="video/mp4"></video>
+      <figcaption>Video 4: Large, 16 AGVs + 8 Pickers (<a href="videos/supp_video_4_large.gif">GIF</a>)</figcaption></figure>
+  </div>
+
+  <h2 id="method">Method</h2>
+  <figure><img src="figures/fig1_allocation_step.png" alt="Allocation and learning at each step">
+    <figcaption>Figure 1. Allocation and learning at each step. The benchmark takes the oldest pending task (1) and its
+    nearest available robot i (2), and executes accepted tasks (5). Robot i requests the complementary robot j it
+    prefers (3), which accepts according to its own preference, with probability 0.25 + 0.75 w<sub>j</sub>[i] (4).
+    Each robot then applies R1–R4 to its own preferences and links (6).</figcaption></figure>
+  <div class="wrap"><table>
+    <tr><th>Rule</th><th>What each robot does with its own preferences and links</th></tr>
+    <tr><td>R1 synaptic</td><td>Decay, plus strengthening in proportion to the share of recent targets shared with the partner; completion credit when a jointly served mission is delivered.</td></tr>
+    <tr><td>R2 homeostatic</td><td>Adjusts its readiness to form links so that its number of links stays near a target.</td></tr>
+    <tr><td>R3 structural</td><td>Prunes weak links after a 20-step grace period; forms a link to its best candidate (recent co-assignment and the robot it was proposed).</td></tr>
+    <tr><td>R4 metaplastic</td><td>BCM sliding threshold (over-potentiated links decay faster) and neuromodulation from its own outcomes.</td></tr>
+  </table></div>
+  <figure><img src="figures/fig2_environment.png" alt="The TA-RWARE warehouse with D-MORPH's links at four fleet sizes">
+    <figcaption>Figure 2. TA-RWARE with D-MORPH's links at four fleet sizes: (A) initial state, before any task is
+    allocated; (B) step 300. Green: established links; red dashed: candidate links.</figcaption></figure>
+
+  <h2 id="scale">Scale study</h2>
+  <p>Seven methods, four fleet sizes, 20 seeds, 800 steps. Full Graph, MORPH, Proximity-r (r = 5) and TSG use MORPH's
+  allocation loop; D-MORPH and both Random-Sparse variants use preference-based partner selection.</p>
+  <div class="wrap"><table>
+    <tr><th>Fleet</th><th class="n">D-MORPH</th><th class="n">Full Graph</th><th class="n">MORPH</th><th class="n">Proximity-r</th><th class="n">TSG</th><th class="n">Random-Sparse fixed / per-step</th><th class="n">D-MORPH links (% of pairs)</th></tr>
+    <tr><td>Tiny (8)</td><td class="n">56.8</td><td class="n">55.4</td><td class="n">53.3</td><td class="n">53.5</td><td class="n">53.3</td><td class="n">16.1 / 35.5</td><td class="n">6.6 (23%)</td></tr>
+    <tr><td>Small (12)</td><td class="n">66.0</td><td class="n">64.6</td><td class="n">64.0</td><td class="n">66.8</td><td class="n">64.9</td><td class="n">18.8 / 33.1</td><td class="n">11.4 (17%)</td></tr>
+    <tr><td>Medium (18)</td><td class="n">90.7</td><td class="n">84.2</td><td class="n">88.3</td><td class="n">85.4</td><td class="n">86.2</td><td class="n">12.4 / 47.1</td><td class="n">17.6 (12%)</td></tr>
+    <tr><td>Large (24)</td><td class="n">104.3</td><td class="n">99.2</td><td class="n">101.3</td><td class="n">104.2</td><td class="n">100.3</td><td class="n">24.4 / 70.8</td><td class="n">23.5 (9%)</td></tr>
+  </table></div>
+  <p>Mean deliveries per episode. D-MORPH delivered significantly more than Full Graph and MORPH at Medium after
+  Bonferroni correction; the other differences to Full Graph, MORPH, Proximity-r and TSG did not pass the correction.</p>
+  <figure><img src="figures/fig3_scale.png" alt="Scale study: cumulative deliveries, throughput, active links and final deliveries">
+    <figcaption>Figure 3. (A) Cumulative deliveries (mean ± SD). (B) Deliveries as a percentage of Full Graph; the
+    y-axis is broken between the Random-Sparse variants and the other methods. (C) Active links as a percentage of
+    the possible pairs. (D) Final deliveries (mean ± SD).</figcaption></figure>
+  <figure><img src="figures/fig4_frontier.png" alt="Deliveries relative to Full Graph versus active links, with the Proximity-r sweep">
+    <figcaption>Figure 4. Deliveries relative to Full Graph against the number of active links (logarithmic x-axis).
+    The blue curve is Proximity-r for r = 1 to 12; markers show the other methods.</figcaption></figure>
+
+  <h2 id="ablation">Ablations</h2>
+  <figure><img src="figures/fig5_ablation.png" alt="D-MORPH ablations: deliveries and active links">
+    <figcaption>Figure 5. D-MORPH with mechanisms removed (mean and 95% confidence interval). Every variant delivered
+    within 4% of the full model and no difference was significant; the mechanisms shape the number of links: without
+    metaplasticity, the predictive hint or the reward credit D-MORPH held fewer links.</figcaption></figure>
+
+  <h2 id="shift">Package location shift</h2>
+  <p>New requests come only from the upper (U) or the lower (L) half of the shelves, alternating every 400 steps over
+  six phases (2400 steps), at Medium and Large. The delivery stations are on the lower edge.</p>
+  <figure><img src="figures/fig6_shift.png" alt="Delivery rate, deliveries per phase and paired differences under the package location shift">
+    <figcaption>Figure 6. (A) Delivery rate (100-step moving average). (B) Deliveries per phase. (C) Degradation
+    between repeated phases and (D) transient retention after a shift: D-MORPH minus each baseline, paired by seed
+    (mean and 95% confidence interval; positive favours D-MORPH; circles: Medium, squares: Large).</figcaption></figure>
+
+  <h2 id="emergent">Emergent allocation structure</h2>
+  <figure><img src="figures/fig7_emergent.png" alt="Links and preferences over one long episode, links by pair type, link lifetimes">
+    <figcaption>Figure 7. One 1500-step Medium episode. (A) Links and (B) preferences held by each robot (row i) at
+    five snapshots; AGVs are robots 0–11. (C) Links by pair type. (D) Mean preference on links. (E) Lifetimes of
+    pruned links: half end just after the grace period, about a third last more than 100 steps.</figcaption></figure>
+
+  <h2 id="reproduce">Reproduce</h2>
+<pre><code>pip install -r requirements.txt
+python -m experiments.run all --jobs 16   # results/*.json, one file per experiment
+python -m experiments.analysis            # docs/figures, docs/tables, docs/results.md
+python scripts/make_videos.py             # docs/videos</code></pre>
+  <p>Every episode is deterministic given its seed. To run D-MORPH in another benchmark or simulator, see
+  <a href="../README.md#using-d-morph-in-your-own-benchmark">Using D-MORPH in your own benchmark</a> in the README.</p>
+
+  <h2 id="cite">Cite</h2>
+<pre><code>@unpublished{niu2026dmorph,
+  author = {Niu, Xuezhi and G{\"u}rd{\"u}r Broo, Didem},
+  title  = {{D-MORPH}: Decentralised Self-Organising Multi-Robot Task Allocation
+            via Neuroplasticity-Inspired Adaptive Topology},
+  note   = {Manuscript},
+  year   = {2026}
+}</code></pre>
+</main>
+</body>
+</html>
