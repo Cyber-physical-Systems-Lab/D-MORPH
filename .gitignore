@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+.venv/ # environments
+venv/ # environments
+.env # environment variables
+.vscode/ # editors and OS
+.idea/ # editors and OS
+*.swp # editors and OS
+.DS_Store # editors and OS
+Thumbs.db # editors and OS
+*.log # run outputs that are not part of the repository
+*.pkl # run outputs that are not part of the repository
+logs/ # run outputs that are not part of the repository
+scratch/ # run outputs that are not part of the repository
+docs/_site/ # GitHub Pages local build
