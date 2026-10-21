@@ -44,16 +44,17 @@
 <body>
 <main>
   <h1>D-MORPH: decentralised self-organising multi-robot task allocation via neuroplasticity-inspired adaptive topology</h1>
-  <p class="sub">Xuezhi Niu and Didem Gürdür Broo &middot; code: <a href="../README.md">README</a> &middot; all numbers: <a href="results.md">results.md</a></p>
+  <p class="sub">Xuezhi Niu and Didem Gürdür Broo &middot; <a href="https://github.com/Cyber-physical-Systems-Lab/D-MORPH">code on GitHub</a> &middot; all numbers: <a href="https://github.com/Cyber-physical-Systems-Lab/D-MORPH/blob/main/docs/results.md">results.md</a></p>
   <nav class="nav">
-    <a href="#videos">Videos</a><a href="#method">Method</a><a href="#scale">Scale study</a><a href="#ablation">Ablations</a>
+    <a href="#key-idea">Key idea</a><a href="#videos">Videos</a><a href="#method">Method</a><a href="#scale">Scale study</a><a href="#ablation">Ablations</a>
     <a href="#shift">Package location shift</a><a href="#emergent">Emergent structure</a><a href="#reproduce">Reproduce</a><a href="#cite">Cite</a>
   </nav>
 
-  <p>Each robot in a heterogeneous team keeps its own directed partner preferences and links and updates them online
-  with four plasticity rules (synaptic, homeostatic, structural and metaplastic) from its own observations: its target,
-  the robot it is co-assigned with, and the completion of their joint mission. D-MORPH needs no task model, no bid
-  computation, no message exchange and no offline training. It is evaluated on the TA-RWARE robotic warehouse with
+  <p>D-MORPH is a training-free, fully decentralised coordination mechanism for heterogeneous multi-robot teams,
+  inspired by neuroplasticity. Each robot learns whom to work with on its own, online, while the team is working: it
+  keeps its own partner preferences and links and rewires them with biologically grounded plasticity rules, using only
+  what it observes itself. It needs no central coordinator, no shared state, no message exchange, no task or cost
+  model, no bidding and no offline training. In the paper it is evaluated on the TA-RWARE robotic warehouse with
   8 to 24 robots.</p>
 
   <div class="key">
@@ -61,6 +62,24 @@
     <div><b>9–23%</b><span>of the possible robot pairs linked; the share falls as the fleet grows</span></div>
     <div><b>−0.12 / −1.40</b><span>deliveries per phase lost between repeated demand phases (Medium / Large), the least of all methods</span></div>
   </div>
+
+  <h2 id="key-idea">Key idea</h2>
+  <p>Multi-robot coordination usually either fixes who works with whom by a hand-designed rule (the nearest robot,
+  robots within a radius), negotiates it through bids over a task cost model, or learns communication end-to-end with
+  offline multi-agent reinforcement learning. <a href="https://github.com/Cyber-physical-Systems-Lab/morph_v2">MORPH</a>
+  showed that a coordination graph can instead self-organise online under plasticity rules, but it keeps the graph as
+  one shared matrix, i.e. a central coordinator. D-MORPH removes the coordinator: every robot owns its row of the graph
+  and updates it from its own target, the robots co-assigned with it, the requests it sends and receives, and its own
+  reward.</p>
+  <div class="wrap"><table>
+    <tr><th>Property</th><th>Proximity rule</th><th>Learned comm (MARL)</th><th>MORPH</th><th>D-MORPH</th></tr>
+    <tr><td>Fully decentralised (no shared state or coordinator)</td><td>✓</td><td>partial</td><td>✗</td><td>✓</td></tr>
+    <tr><td>No offline training</td><td>✓</td><td>✗</td><td>✓</td><td>✓</td></tr>
+    <tr><td>Links formed without sensing other robots' positions</td><td>✗</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    <tr><td>Adapts online to shifts in the task distribution</td><td>✗</td><td>partial</td><td>✓</td><td>✓</td></tr>
+    <tr><td>Persistent memory of good partners</td><td>✗</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    <tr><td>Works from step 0 in any environment</td><td>✓</td><td>✗</td><td>✓</td><td>✓</td></tr>
+  </table></div>
 
   <h2 id="videos">Supplementary Videos 1–4</h2>
   <p>One episode (800 steps, seed 42) at each fleet size. Blue hexagons: AGVs; orange diamonds: Pickers; orange outlines:
@@ -84,11 +103,11 @@
     prefers (3), which accepts according to its own preference, with probability 0.25 + 0.75 w<sub>j</sub>[i] (4).
     Each robot then applies R1–R4 to its own preferences and links (6).</figcaption></figure>
   <div class="wrap"><table>
-    <tr><th>Rule</th><th>What each robot does with its own preferences and links</th></tr>
-    <tr><td>R1 synaptic</td><td>Decay, plus strengthening in proportion to the share of recent targets shared with the partner; completion credit when a jointly served mission is delivered.</td></tr>
-    <tr><td>R2 homeostatic</td><td>Adjusts its readiness to form links so that its number of links stays near a target.</td></tr>
-    <tr><td>R3 structural</td><td>Prunes weak links after a 20-step grace period; forms a link to its best candidate (recent co-assignment and the robot it was proposed).</td></tr>
-    <tr><td>R4 metaplastic</td><td>BCM sliding threshold (over-potentiated links decay faster) and neuromodulation from its own outcomes.</td></tr>
+    <tr><th>Rule</th><th>Biological basis</th><th>What each robot does with its own preferences and links</th></tr>
+    <tr><td>R1 synaptic</td><td>Hebbian plasticity, reward-modulated (dopamine-gated) potentiation</td><td>Decay, plus strengthening in proportion to the share of recent targets shared with the partner; completion credit when a jointly served mission is delivered.</td></tr>
+    <tr><td>R2 homeostatic</td><td>Synaptic scaling</td><td>Adjusts its readiness to form links so that its number of links stays near a target.</td></tr>
+    <tr><td>R3 structural</td><td>Synaptogenesis and pruning</td><td>Prunes weak links after a 20-step grace period; forms a link to its best candidate (recent co-assignment and the robot it was proposed).</td></tr>
+    <tr><td>R4 metaplastic</td><td>BCM sliding threshold, neuromodulation</td><td>Over-potentiated links decay faster; explores new links when its own performance drops and consolidates when it is high.</td></tr>
   </table></div>
   <figure><img src="figures/fig2_environment.png" alt="The TA-RWARE warehouse with D-MORPH's links at four fleet sizes">
     <figcaption>Figure 2. TA-RWARE with D-MORPH's links at four fleet sizes: (A) initial state, before any task is
@@ -140,7 +159,7 @@ python -m experiments.run all --jobs 16   # results/*.json, one file per experim
 python -m experiments.analysis            # docs/figures, docs/tables, docs/results.md
 python scripts/make_videos.py             # docs/videos</code></pre>
   <p>Every episode is deterministic given its seed. To run D-MORPH in another benchmark or simulator, see
-  <a href="../README.md#using-d-morph-in-your-own-benchmark">Using D-MORPH in your own benchmark</a> in the README.</p>
+  <a href="https://github.com/Cyber-physical-Systems-Lab/D-MORPH#using-d-morph-in-your-own-benchmark">Using D-MORPH in your own benchmark</a> in the README.</p>
 
   <h2 id="cite">Cite</h2>
 <pre><code>@unpublished{niu2026dmorph,

@@ -1,17 +1,51 @@
-# D-MORPH: decentralised, plasticity-guided coordination for multi-robot task allocation
+# D-MORPH: Decentralised Self-Organising Multi-Robot Task Allocation via Neuroplasticity-Inspired Adaptive Topology
 
-D-MORPH lets each robot in a heterogeneous team learn **whom to work with**, on its own, while the team is
-working. Every robot keeps its own directed preferences `w_i[j]` and links `A_i[j]` to other robots and updates
-them online with four plasticity rules (synaptic, homeostatic, structural, metaplastic) from what it observes
-itself: its target, the robot it is co-assigned with, and whether their joint task was completed. There is no task
-model, no bidding, no message exchange and no offline training. D-MORPH is the decentralised version of
-[MORPH](https://github.com/Cyber-physical-Systems-Lab/morph_v2), whose preferences are one shared matrix.
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Project page](https://img.shields.io/badge/project-page-971F30.svg)](https://cyber-physical-systems-lab.github.io/D-MORPH/)
+
+D-MORPH is a **training-free, fully decentralised** coordination mechanism for heterogeneous multi-robot teams,
+inspired by neuroplasticity. Each robot learns **whom to work with** on its own, online, while the team is working:
+it keeps its own partner preferences and links and rewires them with biologically grounded plasticity rules, using
+only what it observes itself. No central coordinator, no shared state, no message exchange, no task or cost model,
+no bidding and no offline training are required.
 
 <p align="center"><img src="docs/videos/supp_video_3_medium.gif" width="520" alt="D-MORPH in the TA-RWARE warehouse, 18 robots"></p>
 
 *D-MORPH in the [TA-RWARE](https://github.com/uoe-agents/task-assignment-robotic-warehouse) warehouse
 (12 AGVs, 6 Pickers). Green: established links; red dashed: candidate links still in their grace period.
-Project page with all figures and videos: [`docs/index.html`](docs/index.html).*
+All figures and videos: [project page](https://cyber-physical-systems-lab.github.io/D-MORPH/).*
+
+## Key idea
+
+Multi-robot coordination usually either fixes who works with whom by a hand-designed rule (the nearest robot,
+robots within a radius), negotiates it through bids over a task cost model, or learns communication end-to-end with
+offline multi-agent reinforcement learning. [MORPH](https://github.com/Cyber-physical-Systems-Lab/morph_v2) showed
+that a coordination graph can instead **self-organise online** under plasticity rules, but it keeps the graph as one
+shared matrix, i.e. a central coordinator. D-MORPH removes the coordinator: every robot owns its row of the graph and
+updates it from its own target, the robots co-assigned with it, the requests it sends and receives, and its own
+reward. Nothing in the update reads another robot's state.
+
+| Property | Proximity rule | Learned comm (MARL) | MORPH | D-MORPH |
+|---|:-:|:-:|:-:|:-:|
+| Fully decentralised (no shared state or coordinator) | ✓ | partial | ✗ | ✓ |
+| No offline training | ✓ | ✗ | ✓ | ✓ |
+| Links formed without sensing other robots' positions | ✗ | ✓ | ✓ | ✓ |
+| Adapts online to shifts in the task distribution | ✗ | partial | ✓ | ✓ |
+| Persistent memory of good partners | ✗ | ✓ | ✓ | ✓ |
+| Works from step 0 in any environment | ✓ | ✗ | ✓ | ✓ |
+
+## Neuroplasticity mechanisms
+
+| Rule | Biological basis | Role in D-MORPH |
+|---|---|---|
+| R1 synaptic | Hebbian plasticity, reward-modulated (dopamine-gated) potentiation | Strengthen preferences for robots that share recent targets; extra credit when a jointly served task is completed |
+| R2 homeostatic | Synaptic scaling | Keep each robot's number of links near a target, so the graph stays sparse |
+| R3 structural | Synaptogenesis and pruning | Prune weak links after a grace period; form links to recent co-workers and to robots that were just requested (anticipatory formation) |
+| R4 metaplastic | BCM sliding threshold, neuromodulation | Over-potentiated links decay faster; explore new links when the robot's own performance drops, consolidate when it is high |
+
+The same rules work for any team whose members must pair up for tasks and can observe what they are working on and
+whether it succeeded; TA-RWARE is the benchmark used in the paper (see [Porting D-MORPH](#porting-d-morph-to-another-simulator-or-task)).
 
 ## Results in brief
 
@@ -32,7 +66,8 @@ under 1.2% of requests, so the learned structure changes few allocation decision
 
 ## How D-MORPH works
 
-Each robot `i` holds one row of `W` and `A` (a dictionary over the other robots) and changes only that row.
+Each robot `i` holds one row of `W` and `A` (a dictionary over the other robots) and changes only that row. In
+detail, the four rules above are:
 
 | Rule | What robot `i` does every step (R3: every `k` steps) |
 |---|---|
@@ -68,11 +103,10 @@ docs/              project page (index.html), results.md, figures/, videos/, tab
 
 ## Installation
 
-Python 3.11. TA-RWARE is installed from GitHub (`requirements.txt` pins the versions used for the paper in
-`requirements-lock.txt`).
+Python 3.11. TA-RWARE is installed from GitHub.
 
 ```bash
-git clone <this repository> d-morph && cd d-morph
+git clone https://github.com/Cyber-physical-Systems-Lab/D-MORPH.git && cd D-MORPH
 python -m venv .venv && source .venv/bin/activate      # or: conda create -n dmorph python=3.11
 pip install -r requirements.txt
 ```
