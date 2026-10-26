@@ -1,51 +1,17 @@
-# D-MORPH: Decentralised Self-Organising Multi-Robot Task Allocation via Neuroplasticity-Inspired Adaptive Topology
+# D-MORPH: decentralised, plasticity-guided coordination for multi-robot task allocation
 
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Project page](https://img.shields.io/badge/project-page-971F30.svg)](https://cyber-physical-systems-lab.github.io/D-MORPH/)
-
-D-MORPH is a **training-free, fully decentralised** coordination mechanism for heterogeneous multi-robot teams,
-inspired by neuroplasticity. Each robot learns **whom to work with** on its own, online, while the team is working:
-it keeps its own partner preferences and links and rewires them with biologically grounded plasticity rules, using
-only what it observes itself. No central coordinator, no shared state, no message exchange, no task or cost model,
-no bidding and no offline training are required.
+D-MORPH lets each robot in a heterogeneous team learn **whom to work with**, on its own, while the team is
+working. Every robot keeps its own directed preferences `w_i[j]` and links `A_i[j]` to other robots and updates
+them online with four plasticity rules (synaptic, homeostatic, structural, metaplastic) from what it observes
+itself: its target, the robot it is co-assigned with, and whether their joint task was completed. There is no task
+model, no bidding, no message exchange and no offline training. D-MORPH is the decentralised version of
+[MORPH](https://github.com/Cyber-physical-Systems-Lab/morph_v2), whose preferences are one shared matrix.
 
 <p align="center"><img src="docs/videos/supp_video_3_medium.gif" width="520" alt="D-MORPH in the TA-RWARE warehouse, 18 robots"></p>
 
 *D-MORPH in the [TA-RWARE](https://github.com/uoe-agents/task-assignment-robotic-warehouse) warehouse
 (12 AGVs, 6 Pickers). Green: established links; red dashed: candidate links still in their grace period.
-All figures and videos: [project page](https://cyber-physical-systems-lab.github.io/D-MORPH/).*
-
-## Key idea
-
-Multi-robot coordination usually either fixes who works with whom by a hand-designed rule (the nearest robot,
-robots within a radius), negotiates it through bids over a task cost model, or learns communication end-to-end with
-offline multi-agent reinforcement learning. [MORPH](https://github.com/Cyber-physical-Systems-Lab/morph_v2) showed
-that a coordination graph can instead **self-organise online** under plasticity rules, but it keeps the graph as one
-shared matrix, i.e. a central coordinator. D-MORPH removes the coordinator: every robot owns its row of the graph and
-updates it from its own target, the robots co-assigned with it, the requests it sends and receives, and its own
-reward. Nothing in the update reads another robot's state.
-
-| Property | Proximity rule | Learned comm (MARL) | MORPH | D-MORPH |
-|---|:-:|:-:|:-:|:-:|
-| Fully decentralised (no shared state or coordinator) | ✓ | partial | ✗ | ✓ |
-| No offline training | ✓ | ✗ | ✓ | ✓ |
-| Links formed without sensing other robots' positions | ✗ | ✓ | ✓ | ✓ |
-| Adapts online to shifts in the task distribution | ✗ | partial | ✓ | ✓ |
-| Persistent memory of good partners | ✗ | ✓ | ✓ | ✓ |
-| Works from step 0 in any environment | ✓ | ✗ | ✓ | ✓ |
-
-## Neuroplasticity mechanisms
-
-| Rule | Biological basis | Role in D-MORPH |
-|---|---|---|
-| R1 synaptic | Hebbian plasticity, reward-modulated (dopamine-gated) potentiation | Strengthen preferences for robots that share recent targets; extra credit when a jointly served task is completed |
-| R2 homeostatic | Synaptic scaling | Keep each robot's number of links near a target, so the graph stays sparse |
-| R3 structural | Synaptogenesis and pruning | Prune weak links after a grace period; form links to recent co-workers and to robots that were just requested (anticipatory formation) |
-| R4 metaplastic | BCM sliding threshold, neuromodulation | Over-potentiated links decay faster; explore new links when the robot's own performance drops, consolidate when it is high |
-
-The same rules work for any team whose members must pair up for tasks and can observe what they are working on and
-whether it succeeded; TA-RWARE is the benchmark used in the paper (see [Porting D-MORPH](#porting-d-morph-to-another-simulator-or-task)).
+Project page with all figures and videos: [`docs/index.html`](docs/index.html).*
 
 ## Results in brief
 
@@ -61,20 +27,19 @@ TA-RWARE, 20 seeds per condition, 800 steps per episode (full tables: [`docs/res
 Under a package location shift (demand alternates between the upper and lower half of the warehouse every 400
 steps), D-MORPH lost the fewest deliveries between repeated visits to the same half: −0.12 deliveries per phase at
 Medium (other baselines −3.20 to −5.70; Random-Sparse (fixed) −0.38 only because it had almost stopped delivering)
-and −1.40 at Large (baselines −1.65 to −4.38); no single difference passed the Bonferroni correction. In TA-RWARE the partner chosen by preference differs from the nearest available robot in
+and −1.40 at Large (baselines −1.65 to −4.38); at Medium the differences against Full Graph, MORPH, Proximity-r and TSG are significant (paired Wilcoxon, p < 0.05, uncorrected), at Large none is. In TA-RWARE the partner chosen by preference differs from the nearest available robot in
 under 1.2% of requests, so the learned structure changes few allocation decisions; see the paper's discussion.
 
 ## How D-MORPH works
 
-Each robot `i` holds one row of `W` and `A` (a dictionary over the other robots) and changes only that row. In
-detail, the four rules above are:
+Each robot `i` holds one row of `W` and `A` (a dictionary over the other robots) and changes only that row.
 
-| Rule | What robot `i` does every step (R3: every `k` steps) |
+| Rule | What robot `i` does every step (`k_slow = 1`: every rule runs every step) |
 |---|---|
 | R1 synaptic | decays `w_i[j]` and strengthens it in proportion to the share of its recent targets shared with `j`; adds completion credit when a mission it served with `j` is delivered |
 | R2 homeostatic | raises or lowers its readiness to form links to keep its number of links near a target |
 | R3 structural | prunes links whose preference fell below a threshold (after a 20-step grace period) and forms a link to its best candidate (recent co-assignment plus the robot it was proposed) |
-| R4 metaplastic | BCM sliding threshold (over-potentiated links decay faster) and neuromodulation from its own outcomes (consolidate when above expectation, explore when below) |
+| R4 metaplastic | BCM-inspired sliding threshold (a preference above its own history decays faster) and neuromodulation from its own completed deliveries (the learning rate rises above its running baseline, the link-formation threshold falls below it) |
 
 Allocation uses the preferences as follows: the oldest pending task goes to the nearest available robot `i`;
 `i` requests the available robot `j` of the complementary role with the highest `w_i[j]` (the nearest if tied);
@@ -84,29 +49,34 @@ Allocation uses the preferences as follows: the oldest pending task goes to the 
 
 ```
 dmorph/            the method
-  core.py          DMORPH: per-robot preferences and links, R1-R4, completion credit
+  core.py          DMORPH: per-robot preferences and links, R1-R4, completion credit; ablation switches (off by default)
   allocation.py    select_partner() and accepts(): how preferences enter allocation
   params.py        the paper's parameters (identical at every fleet size)
 experiments/       everything needed to reproduce the paper
   harness.py       one TA-RWARE episode with D-MORPH or a baseline (allocation, AGV mission controller, demand shift)
-  config.py        seeds, fleet sizes, horizons, baselines, ablations
+  config.py        seeds, fleet sizes, horizons, baselines, rule ablations
   morph.py         centralised MORPH (baseline)
   signals.py       TA-RWARE observation helpers (targets, co-assignment, proximity) used by the baselines
-  run.py           runs the five experiments -> results/*.json
+  ablation.py      rule ablations with one pre-specified primary measure each (Figure 5)
+  run.py           runs the paper's six experiments and the additional analyses -> results/*.json
+  r4.py, r4reg.py  additional R4 analyses, not in the manuscript (bounded/unbounded weights; regulation and R1-R3 interactions)
   analysis.py      statistics, tables and figures -> docs/
 scripts/
   run_dmorph.py    run one episode and print what happened
   make_videos.py   render the supplementary videos -> docs/videos/
-results/           one file per experiment: scale, frontier, ablation, shift, emergent (.json)
-docs/              project page (index.html), results.md, figures/, videos/, tables/
+results/           one file per experiment: scale, frontier, ablation, shift, emergent, mechanism (.json); additional analyses:
+                   control, partner, r4, r4reg
+docs/              project page (index.html), results.md, figures/, videos/, tables/; pre-specifications of the ablations
+                   (ablation_hypotheses.md, r4_hypotheses.md, r4_regulation_hypotheses.md)
 ```
 
 ## Installation
 
-Python 3.11. TA-RWARE is installed from GitHub.
+Python 3.11. TA-RWARE is installed from GitHub (`requirements.txt` pins the versions used for the paper in
+`requirements-lock.txt`).
 
 ```bash
-git clone https://github.com/Cyber-physical-Systems-Lab/D-MORPH.git && cd D-MORPH
+git clone <this repository> d-morph && cd d-morph
 python -m venv .venv && source .venv/bin/activate      # or: conda create -n dmorph python=3.11
 pip install -r requirements.txt
 ```
@@ -131,12 +101,12 @@ D-MORPH on TA-RWARE medium (N = 18), seed 42, 800 steps
   partner differs from the nearest robot in 0.3% of requests; 73% of requests refused and retried
 ```
 
-The whole paper (2,200 episodes) runs in about six minutes on 16 cores.
+The whole paper (2,921 episodes) runs in about 14 minutes with 28 worker processes.
 
 ## Reproducing the paper
 
 ```bash
-python -m experiments.run all --jobs 16     # writes results/{scale,frontier,ablation,shift,emergent}.json
+python -m experiments.run all --jobs 16     # writes results/{scale,frontier,ablation,shift,emergent,mechanism}.json
 python -m experiments.analysis              # writes docs/figures, docs/tables, docs/results.md
 python scripts/make_videos.py               # writes docs/videos
 ```
@@ -144,20 +114,37 @@ python scripts/make_videos.py               # writes docs/videos
 | Experiment | Paper | Episodes | Output |
 |---|---|---|---|
 | `scale` | Table 4, Figure 3 | 7 methods × 4 fleet sizes × 20 seeds, T = 800 | `results/scale.json` |
+| `mechanism` | Table 4 (Refused, Idle, Task time) | the same 7 methods × 4 × 20, with refusal, idle, task-time, queue-wait, clash and stuck counters | `results/mechanism.json` |
 | `frontier` | Figure 4 | Proximity-r, r = 1…12 × 4 × 20 | `results/frontier.json` |
-| `ablation` | Figure 5 | 5 D-MORPH variants × 4 × 20 | `results/ablation.json` |
+| `ablation` | Figure 5 | full D-MORPH and 4 ablations × 4 × 20, T = 800; full D-MORPH and 3 ablations × Medium, Large × 20, T = 2400 | `results/ablation.json` |
 | `shift` | Table 5, Figure 6 | 7 methods × Medium, Large × 20, T = 2400 | `results/shift.json` |
 | `emergent` | Figure 7 | 1 D-MORPH episode, Medium, seed 42, T = 1500 | `results/emergent.json` |
 
 Every episode is deterministic given its seed (TA-RWARE and NumPy are seeded per episode; episodes run in separate
 processes), so the results files are reproduced exactly. Each experiment can be run alone, e.g.
 `python -m experiments.run shift --jobs 8`. Figure 1 (`docs/figures/fig1_allocation_step`) is a drawing, not a result.
+All comparisons are paired by seed and use the two-sided Wilcoxon signed-rank test; differences with p < 0.05 are
+reported as significant, with no correction for multiple comparisons (as in the paper).
 
 Methods compared (`experiments/config.py`): **Full Graph** (every pair linked), **MORPH** (centralised),
 **Proximity-r** (robots within Manhattan distance r, r = 5), **TSG** (robots sharing a current target),
 **Random-Sparse (fixed)** and **(per-step)** (random links from all pairs with D-MORPH's link budget and random
 preferences, drawn once per episode or every step; a request fails if the chosen robot has no link, the same role,
-or is busy), and five D-MORPH ablations.
+or is busy).
+
+Rule ablations (`experiments/ablation.py`, Figure 5): each removes one rule and is compared with full D-MORPH on one
+measure fixed before the runs (`docs/ablation_hypotheses.md`): **No completion credit** (R1, preference of pairs that
+delivered together minus pairs only co-assigned), **No homeostasis** (R2, deviation of each robot's links from its
+target), **No predictive formation** (R3, active links at step 50) and **Frozen structure** (R3, no link formation or
+pruning after step 400 of the location shift; co-assigned pairs that are linked). **No R4** (BCM decay and
+neuromodulation both off; mean active links) was added after these four. The two pre-specified R4 component tests
+(No BCM threshold, No neuromodulation) are also run and reported in `docs/results.md`, but not in the paper.
+Deliveries under each ablation: `docs/tables/table_ablation_deliveries.tex`.
+
+Additional analyses, not reported in the paper (`python -m experiments.run <name>`): `control` (D-MORPH's
+allocation with every pair linked and frozen uniform preferences), `partner` (hidden slow Pickers), `r4` (R4 on/off
+with bounded and unbounded preference weights; `docs/r4_hypotheses.md`) and `r4reg` (R4 regulation and R1-R3 × R4
+interactions; `docs/r4_regulation_hypotheses.md`).
 
 ## Using D-MORPH in your own benchmark
 

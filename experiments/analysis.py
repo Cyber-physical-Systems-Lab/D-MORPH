@@ -99,7 +99,7 @@ def paired(a, b):
 
 # ── scale study: Table 4, Figure 3 ───────────────────────────────────────────
 def scale_stats(R):
-    alpha = 0.05 / (len(S) * len(BASE))
+    alpha = 0.05                                          # no multiplicity correction (paper)
     out = dict(alpha=alpha, rows={}, tests={})
     for sc in S:
         E = NSZ[sc] * (NSZ[sc] - 1) / 2; fg = mean(by_seed(R, method='full', scale=sc))
@@ -120,24 +120,49 @@ def scale_stats(R):
     return out
 
 
-def table4(st):
-    rows = [r'\begin{table}[!ht]', r'\centering',
-            r"\caption{Scale study ($T=800$, 20 seeds, mean $\pm$ SD). \%FG: deliveries as \% of Full Graph. Links: mean active "
-            r"links (\% of maximum possible). Full Graph, MORPH, Proximity-$r$ ($r=5$) and TSG use MORPH's original allocation "
-            r"loop (the nearest free Picker is proposed and the response is gated by the link or preference); D-MORPH and both "
-            r"Random-Sparse variants use preference-based partner selection. Bold: most deliveries and fewest active links at each scale.}",
-            r'\label{tab:main}', r'\footnotesize', r'\begin{tabular}{llrrr}', r'\hline',
-            r'Scale ($N$) & Method & Deliveries & \%FG & Links (\%max) \\', r'\hline']
-    B = lambda txt, on: (r'\textbf{' + txt + '}') if on else txt
+def diag_stats(M):
+    """Refusals, idle time, task time, queue waiting, clashes and stucks per method and scale (mechanism.json):
+    mean and SD over the 20 seeds. Refused: share of partner requests refused in an episode (0 if none was made);
+    idle: share of steps without a task; task time: steps from assignment to delivery and to the return of the shelf
+    (episodes without a completed task are left out); queue wait: steps from a request entering the queue to its
+    assignment (requests assigned within the episode); clashes and stucks: the benchmark's counters per episode."""
+    def ms(rows, f):
+        v = np.array([f(r) for r in rows if f(r) is not None], float)
+        return float(v.mean()), float(v.std(ddof=1))
+    F = dict(refused=lambda r: 100 * r['refusals'] / r['proposals'] if r['proposals'] else 0.0,
+             idle_agv=lambda r: 100 * r['agv_idle_rate'], idle_picker=lambda r: 100 * r['picker_idle_rate'],
+             to_delivery=lambda r: r['task_delivery'], to_return=lambda r: r['task_return'],
+             queue_wait=lambda r: r['queue_wait'], clashes=lambda r: r['clashes'], stucks=lambda r: r['stucks'])
+    out = {}
     for sc in S:
-        V = {m: st['rows'][f'{m}_{sc}'] for m in C.METHODS}
-        bJ = max(round(v['deliveries'], 1) for v in V.values()); bL = min(round(v['links'], 1) for v in V.values())
-        for i, m in enumerate(C.METHODS):
-            v = V[m]; isJ = round(v['deliveries'], 1) == bJ
-            lab = r'\textbf{D-MORPH}' if m == 'dmorph' else C.LABELS[m].replace('Proximity-r', 'Proximity-$r$')
-            rows.append((f'{sc.capitalize()} ({NSZ[sc]})' if i == 0 else '') + f' & {lab} & '
-                        + B(f"{v['deliveries']:.1f} $\\pm$ {v['sd']:.1f}", isJ) + ' & ' + B(f"{v['pct_full']:.0f}\\%", isJ) + ' & '
-                        + B(f"{v['links']:.1f} ({v['links_pct']:.0f}\\%)", round(v['links'], 1) == bL) + r' \\')
+        for m in C.METHODS:
+            rows = [r for r in M if r['method'] == m and r['scale'] == sc and r.get('w_uniform') is None]
+            out[f'{m}_{sc}'] = {k: ms(rows, f) for k, f in F.items()}
+    return out
+
+
+def table4(st, dg):
+    rows = [r'\begin{table}[!ht]', r'\centering',
+            r"\caption{TA-RWARE scale study ($T=800$, 20 seeds; mean $\pm$ SD over episodes). \%FG denotes deliveries as a "
+            r"percentage of Full Graph performance. Links reports the mean number of active links, with the percentage of the "
+            r"maximum possible links in parentheses. A task is one requested shelf; it is assigned when its robots are committed "
+            r"to it. Refused: share of partner requests in an episode that were refused (0 if no request was made). Idle: share of "
+            r"steps in which an AGV or a Picker has no task. Task time: steps from assignment until the shelf is delivered, and "
+            r"until it is returned to a shelf location.}",
+            r'\label{tab:main}', r'\footnotesize', r'\begin{tabular}{lrrrrrrrr}', r'\hline',
+            r' & & & & Refused & \multicolumn{2}{c}{Idle (\%)} & \multicolumn{2}{c}{Task time (steps)} \\',
+            r'Method & Deliveries & \%FG & Links (\%max) & (\%) & AGV & Picker & to delivery & to return \\', r'\hline']
+    pm = lambda m_sd, d: '0' if (round(m_sd[0], d) == 0 and round(m_sd[1], d) == 0) else f'{m_sd[0]:.{d}f}\\,$\\pm$\\,{m_sd[1]:.{d}f}'
+    for sc in S:
+        rows.append(rf'\multicolumn{{9}}{{l}}{{\textit{{{sc.capitalize()}}} ($N={NSZ[sc]}$)}} \\')
+        for m in C.METHODS:
+            v = st['rows'][f'{m}_{sc}']; d = dg[f'{m}_{sc}']
+            cells = [pm((v['deliveries'], v['sd']), 1), f"{v['pct_full']:.0f}\\%", f"{v['links']:.1f} ({v['links_pct']:.0f}\\%)",
+                     pm(d['refused'], 0), pm(d['idle_agv'], 1), pm(d['idle_picker'], 1), pm(d['to_delivery'], 1), pm(d['to_return'], 1)]
+            lab = C.LABELS[m].replace('Proximity-r', 'Proximity-$r$')
+            if m == 'dmorph':
+                lab, cells = r'\textbf{D-MORPH}', [r'\textbf{' + c + '}' for c in cells]
+            rows.append(' & '.join([lab] + cells) + r' \\')
         rows.append(r'\hline')
     rows += [r'\end{tabular}', r'\end{table}', '']
     os.makedirs(TAB, exist_ok=True)
@@ -252,35 +277,63 @@ def fig4_frontier(R, F):
     return {sc: dict(r=b[2], deliveries=b[3], links=b[0]) for sc, b in best.items()}
 
 
-# ── Figure 5: ablations ──────────────────────────────────────────────────────
-def fig5_ablation(R, Ab):
-    rows = [('dmorph', 'D-MORPH (all rules)')] + list(C.ABLATION_LABELS.items())
-    alpha = 0.05 / (len(S) * len(C.ABLATIONS)); tests = {}
-    fig, axes = plt.subplots(2, 4, figsize=(W2, 105 * MM), sharey=True)
-    fig.subplots_adjust(left=0.22, right=0.98, top=0.9, bottom=0.11, hspace=0.45, wspace=0.1)
-    for k, sc in enumerate(S):
-        dm = by_seed(R, method='dmorph', scale=sc)
-        for a_ in C.ABLATIONS:
-            cur = by_seed(Ab, scale=sc, ablation=a_)
-            d, h, p = paired({s: v['deliveries'] for s, v in cur.items()}, {s: v['deliveries'] for s, v in dm.items()})
-            tests[f'{a_}_{sc}'] = dict(deliveries=mean(cur), links=mean(cur, 'links'), diff=d, ci=h, p=p,
-                                       rel=mean(cur) / mean(dm), links_rel=mean(cur, 'links') / mean(dm, 'links'), significant=p < alpha)
-        for r_, key in enumerate(('deliveries', 'links')):
-            a = axes[r_, k]; style(a, 'x')
-            for i, (m, _) in enumerate(rows):
-                cur = dm if m == 'dmorph' else by_seed(Ab, scale=sc, ablation=m)
-                x = [v[key] for v in cur.values()]
-                a.errorbar(np.mean(x), i, xerr=ci(x), fmt='o', color=RED if m == 'dmorph' else MUTED, ms=4.5, mec=DARK, mew=0.4, capsize=1.5)
-            if key == 'deliveries':
-                a.axvline(mean(by_seed(R, method='full', scale=sc)), color=DARK, ls='--', lw=1)
-            a.set_yticks(range(len(rows))); a.set_yticklabels([l for _, l in rows])
-            if k == 0:
-                a.invert_yaxis(); panel_letter(fig, a, 'AB'[r_])
-            if r_ == 0:
-                a.set_title(f'{sc.capitalize()} (N={NSZ[sc]})', color=INK)
-            a.set_xlabel('deliveries per episode' if key == 'deliveries' else 'active links')
+# ── Figure 5: rule ablations (docs/ablation_hypotheses.md; results/ablation.json) ────────────────────
+RULE_PANELS = [  # (ablation, record field, scale factor, y label, rule, measure)
+    ('noreward', 'credit_gap', 1, 'preference gap', 'No completion credit (R1)', 'delivering pairs minus co-assigned pairs'),
+    ('nohomeo', 'deg_dev', 1, 'deviation (links)', 'No homeostasis (R2)', 'mean |links - target| per robot'),
+    ('nopred', 'links50', 1, 'directed links', 'No predictive formation (R3)', 'active links at step 50'),
+    ('nostruct', 'coassigned_linked', 100, 'linked pairs (%)', 'No structural plasticity (R3)', 'co-assigned pairs linked after shift'),
+    ('nor4', 'links', 1, 'active links', 'No metaplasticity (R4)', 'mean active links'),
+]
+RULE_ALPHA = 0.05
+
+
+def fig5_ablation(Rr):
+    """Full D-MORPH vs each rule ablation on its measure (mean and 95% CI over 20 seeds); text: paired difference
+    full - ablation and Wilcoxon p (bold, dark if p < 0.05). Three panels on top, two centred below."""
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.lines import Line2D
+    fig = plt.figure(figsize=(W2, 112 * MM))
+    gs = GridSpec(2, 6, figure=fig, left=0.085, right=0.985, top=0.83, bottom=0.08, hspace=0.72, wspace=1.2)
+    slots = [gs[0, 0:2], gs[0, 2:4], gs[0, 4:6], gs[1, 1:3], gs[1, 3:5]]
+    out = {}
+    for n, (ab, key, f, ylab, rule, measure) in enumerate(RULE_PANELS):
+        a = fig.add_subplot(slots[n]); style(a, 'y')
+        kind = 'shift' if ab in ('nostruct', 'nobcm', 'noneuro') else 'scale'
+        scales = list(C.SHIFT_SCALES) if kind == 'shift' else S
+        ann = []
+        for k, sc in enumerate(scales):
+            v = {cond: {r['seed']: r[key] * f for r in Rr if r['kind'] == kind and r['ablation'] == cond
+                        and r['scale'] == sc and r[key] is not None} for cond in ('full', ab)}
+            for j, (cond, col, mk, mfc) in enumerate((('full', RED, 'o', RED), (ab, MUTED, 'D', 'white'))):
+                x = list(v[cond].values())
+                a.errorbar(k + (-0.16 if j == 0 else 0.16), np.mean(x), yerr=ci(x), fmt=mk, color=col, mfc=mfc, mec=col,
+                           ms=4.8, mew=1.1, capsize=2.2, elinewidth=1.1, zorder=3)
+            d, h, p = paired(v['full'], v[ab])
+            out[f'{ab}_{key}_{sc}'] = dict(full=float(np.mean(list(v['full'].values()))), ablation=float(np.mean(list(v[ab].values()))),
+                                           diff=d, ci=h, p=p, significant=p < RULE_ALPHA)
+            ann.append((k, d, p))
+        if f == 100:
+            a.set_ylim(0, 112)
+        lo, top = a.get_ylim(); span = top - lo
+        for k, d, p in ann:
+            sig = p < RULE_ALPHA
+            ptxt = 'p<.001' if p < 0.001 else f'p={p:.3f}'.replace('0.', '.') if p < 0.05 else f'p={p:.2f}'.replace('0.', '.')
+            a.text(k, top + 0.05 * span, f'{d:+.2g}\n{ptxt}', ha='center', va='bottom', fontsize=6.2, linespacing=1.1,
+                   color=INK if sig else GREY, fontweight='bold' if sig else 'normal')
+        a.set_ylim(lo, top + 0.34 * span)
+        if f == 100:
+            a.set_yticks([0, 25, 50, 75, 100])
+        a.set_xticks(range(len(scales))); a.set_xticklabels([s.capitalize() for s in scales], fontsize=7)
+        a.set_xlim(-0.55, len(scales) - 0.45)
+        a.set_ylabel(ylab, color=INK, fontsize=7.5); a.tick_params(axis='y', labelsize=7)
+        title = f'({"ABCDE"[n]}) ' + rule
+        a.set_title(r'$\bf{' + title.replace(' ', r'\ ') + '}$\n' + measure, color=INK, fontsize=7.5, loc='left', linespacing=1.3, x=-0.18)
+    h_ = [Line2D([], [], color=RED, marker='o', ls='', ms=5, label='D-MORPH (all rules)'),
+          Line2D([], [], color=MUTED, marker='D', mfc='white', ls='', ms=5, mew=1.1, label='rule removed')]
+    fig.legend(handles=h_, loc='upper center', ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.0), fontsize=7.5)
     save(fig, 'fig5_ablation')
-    return dict(alpha=alpha, tests=tests)
+    return out
 
 
 # ── package location shift: Table 5, Figure 6 ───────────────────────────────
@@ -308,7 +361,10 @@ def endpoints(sd):
 
 
 def shift_stats(Sh):
-    alpha = 0.05 / (len(C.SHIFT_SCALES) * len(BASE) * 2)
+    """Per method and scale: deliveries per phase, recovery times, degradation dbar = ((P5 - P3) + (P6 - P4)) / 2
+    (negative: fewer deliveries on the later visit to the same region) and retention. D-MORPH against each baseline:
+    paired two-sided Wilcoxon, significant if p < 0.05 (no correction for multiple comparisons)."""
+    alpha = 0.05
     E = {(r['method'], r['scale'], r['seed']): endpoints(r['step_deliveries']) for r in Sh}
     out = dict(alpha=alpha, methods={}, tests={},
                zone_share=float(np.mean([np.mean(list(r['zone_share'].values())) for r in Sh if r['zone_share']])))
@@ -321,19 +377,17 @@ def shift_stats(Sh):
         for m in BASE:
             for k in ('dbar', 'tr', 'rbar'):
                 d, h, p = paired({s: E[('dmorph', sc, s)][k] for s in C.SEEDS}, {s: E[(m, sc, s)][k] for s in C.SEEDS})
-                out['tests'][f'{k}_{m}_{sc}'] = dict(diff=d, lo=d - h, hi=d + h, p=p,
-                                                     significant=bool(k != 'rbar' and p < alpha and (d - h > 0 or d + h < 0)))
+                out['tests'][f'{k}_{m}_{sc}'] = dict(diff=d, lo=d - h, hi=d + h, p=p, significant=bool(p < alpha))
     return out
 
 
 def table5(st):
     rows = [r'\begin{table}[!ht]', r'\centering',
-            r"\caption{Package location shift (20 seeds, mean). New requests only from the upper (U) or lower (L) half of the "
-            r"shelves, alternating every 400 steps; the delivery stations are on the lower edge. P1--P6: deliveries in each phase. "
-            r"$r_3$--$r_6$: recovery time after the shift into phase $k$, the steps until the delivery rate over the following "
-            r"steps (at most 50) reaches 90\% of the rate of the previous phase with demand in the same half ($k-2$) over its last "
-            r"50 steps (MORPH's definition; 400 if never); $\bar r$: mean of $r_3$--$r_6$. Bold: best value in each column and "
-            r"scale (most deliveries, shortest recovery).}",
+            r"\caption{Package location shift (20 seeds, mean). Task requests alternate between the upper (U, farther) and lower (L, closer) "
+            r"warehouse regions every 400 steps. P1-P6: deliveries in each phase. Recovery $r_k$ ($k=3,\ldots,6$): recovery time after the shift "
+            r"into phase $k$, the steps until the delivery rate over the following steps (at most 50) reaches 90\% of the rate of the previous "
+            r"phase with demand in the same half ($k-2$) over its last 50 steps (400 if never); $\bar r$: mean of $r_3$-$r_6$. The repeated-regime "
+            r"degradation and the transient retention are compared in Figure~\ref{fig:resilience}.}",
             r'\label{tab:resilience}', r'\footnotesize', r'\setlength{\tabcolsep}{4pt}', r'\begin{tabular}{llrrrrrrrrrrr}', r'\hline',
             r' & & \multicolumn{6}{c}{Deliveries per phase} & \multicolumn{5}{c}{Recovery time (steps)} \\',
             r'Scale & Condition & P1 U & P2 L & P3 U & P4 L & P5 U & P6 L & $r_3$ U & $r_4$ L & $r_5$ U & $r_6$ L & $\bar r$ \\', r'\hline']
@@ -414,6 +468,7 @@ def fig7_emergent(e):
     from matplotlib.colors import ListedColormap
     ts = sorted(int(t) for t in e['snapshots']); na, N, T_ = e['n_agv'], e['N'], e['T']
     snap = {t: {k: np.array(v) for k, v in e['snapshots'][str(t)].items()} for t in ts}
+    snap[-1] = dict(A=np.zeros((N, N)), W=np.zeros((N, N))); ts = [-1] + ts      # t = 0: initial state, A = W = 0
     vmax = max(float(snap[t]['W'].max()) for t in ts) or 1.0
     fig = plt.figure(figsize=(W2, 140 * MM))
     gA = fig.add_gridspec(2, len(ts), wspace=0.12, hspace=0.32, left=0.08, right=0.9, top=0.95, bottom=0.44)
@@ -515,11 +570,64 @@ def fig2_environment():
     save(fig, 'fig2_environment')
 
 
-# ── Markdown summary ─────────────────────────────────────────────────────────
-def results_md(sc_st, best_prox, ab, sh, em):
-    L = ['# Results', '', 'Generated by `python -m experiments.analysis` from `results/*.json` (20 seeds per condition).', '',
-         '## Scale study (Table 4, Figure 3)', '', f'T = 800 steps. Paired Wilcoxon against D-MORPH, Bonferroni alpha = {sc_st["alpha"]:.4f} '
-         f'({len(S) * len(BASE)} comparisons).', '',
+# ── ablation and control statistics (results/ablation.json, results/control.json) ─────────────────────
+ABL_PRIMARY = [  # (ablation, setting, record field, scale factor, measure)
+    ('noreward', 'scale', 'credit_gap', 1, 'preference of delivering pairs minus co-assigned-only pairs'),
+    ('nohomeo', 'scale', 'deg_dev', 1, 'mean |links - target| per robot'),
+    ('nopred', 'scale', 'links50', 1, 'active directed links at step 50'),
+    ('nor4', 'scale', 'links', 1, 'mean active links (additional ablation)'),
+    ('nostruct', 'shift', 'coassigned_linked', 100, 'co-assigned pairs linked after the first shift (%)'),
+    ('nobcm', 'shift', 'stale_survival', 100, 'links active 25 steps before a shift still active 50 steps after it (%); not in the manuscript'),
+    ('noneuro', 'shift', 'rbar', 1, 'mean recovery time (steps); not in the manuscript'),
+]
+
+
+def ablation_stats(Ab):
+    """Full D-MORPH vs each ablation on the pre-specified primary measure and on deliveries (paired Wilcoxon, same seeds)."""
+    out = {}
+    for ab, kind, key, f, measure in ABL_PRIMARY:
+        for sc in (S if kind == 'scale' else C.SHIFT_SCALES):
+            g = lambda cond, k: {r['seed']: r[k] * (f if k == key else 1) for r in Ab if r['kind'] == kind and r['ablation'] == cond
+                                 and r['scale'] == sc and r[k] is not None}
+            d, h, p = paired(g('full', key), g(ab, key)); dd, dh, dp = paired(g('full', 'deliveries'), g(ab, 'deliveries'))
+            out[f'{ab}_{sc}'] = dict(setting=kind, measure=measure, full=float(np.mean(list(g('full', key).values()))),
+                                     ablation=float(np.mean(list(g(ab, key).values()))), diff=d, p=p,
+                                     deliveries_full=float(np.mean(list(g('full', 'deliveries').values()))),
+                                     deliveries_ablation=float(np.mean(list(g(ab, 'deliveries').values()))), deliveries_diff=dd, deliveries_p=dp)
+    return out
+
+
+def table_ablation_deliveries(Ab):
+    """Deliveries per episode for each rule ablation against full D-MORPH (same seeds; secondary measure of Figure 5)."""
+    rows = [r'\begin{table}[htbp]', r'\centering',
+            r'\caption{Deliveries per episode for each rule ablation (mean $\pm$ SD). Each ablation is compared with full D-MORPH on the same '
+            r'seeds and in the same setting; $\Delta$: ablation minus full D-MORPH; $p$: paired two-sided Wilcoxon test. The primary measure '
+            r'of each ablation is reported in Figure~5.}', r'\label{tab:ablation_deliveries}', r'\footnotesize', r'\setlength{\tabcolsep}{4pt}',
+            r'\begin{tabular}{lllrrrr}', r'\hline', r'Ablation & Setting & Scale & Full D-MORPH & Ablation & $\Delta$ & $p$ \\', r'\hline']
+    fp = lambda p: '$<$0.001' if p < 0.001 else f'{p:.3f}'
+    for a_, kind, *_ in ABL_PRIMARY:
+        for n, sc in enumerate(S if kind == 'scale' else C.SHIFT_SCALES):
+            g = lambda cond: np.array([r['deliveries'] for r in sorted([r for r in Ab if r['kind'] == kind and r['ablation'] == cond
+                                                                       and r['scale'] == sc], key=lambda r: r['seed'])], float)
+            f, a = g('full'), g(a_)
+            p = float(wilcoxon(a - f).pvalue) if np.any(a != f) else 1.0
+            setting = ('scale study, $T=800$' if kind == 'scale' else 'location shift, $T=2400$') if n == 0 else ''
+            rows.append(f"{C.ABLATION_LABELS[a_].replace(' (', ' (') if n == 0 else ''} & {setting} & {sc.capitalize()} & "
+                        f"{f.mean():.1f}\\,$\\pm$\\,{f.std(ddof=1):.1f} & {a.mean():.1f}\\,$\\pm$\\,{a.std(ddof=1):.1f} & {(a - f).mean():+.1f} & {fp(p)} \\\\")
+        rows.append(r'\hline')
+    rows += [r'\end{tabular}', r'\end{table}', '']
+    open(os.path.join(TAB, 'table_ablation_deliveries.tex'), 'w').write('\n'.join(rows))
+
+
+def p4(p):
+    return 'p < 0.0001' if p < 1e-4 else f'p = {p:.4f}'
+
+
+def results_md(sc_st, dg, best_prox, ab, sh, em):
+    L = ['# Results', '', 'Generated by `python -m experiments.analysis` from `results/*.json` (20 seeds per condition). All comparisons '
+         'are paired by seed and use the two-sided Wilcoxon signed-rank test; differences with p < 0.05 are reported as significant, '
+         'with no correction for multiple comparisons.', '',
+         '## Scale study (Table 4, Figure 3)', '', 'T = 800 steps. Paired Wilcoxon against D-MORPH.', '',
          '| Scale | Method | Deliveries (mean ± SD) | % of Full Graph | Active links (% of pairs) | D-MORPH minus method [95% CI], p |',
          '|---|---|---|---|---|---|']
     for sc in S:
@@ -527,11 +635,22 @@ def results_md(sc_st, best_prox, ab, sh, em):
             v = sc_st['rows'][f'{m}_{sc}']
             tst = '' if m == 'dmorph' else (lambda t: f"{t['diff']:+.2f} [{t['diff'] - t['ci']:+.2f}, {t['diff'] + t['ci']:+.2f}], "
                                                      f"p = {t['p']:.4f}{' *' if t['significant'] else ''}")(sc_st['tests'][f'{m}_{sc}'])
-            L.append(f"| {sc.capitalize()} ({NSZ[sc]}) | {C.LABELS[m]} | {v['deliveries']:.1f} ± {v['sd']:.1f} | {v['pct_full']:.0f}% | "
+            L.append(f"| {sc.capitalize()} ({NSZ[sc]}) | {C.LABELS[m]} | {v['deliveries']:.1f} ± {v['sd']:.1f} | {v['pct_full']:.1f}% | "
                      f"{v['links']:.1f} ({v['links_pct']:.0f}%) | {tst} |")
-    L += ['', '\\* significant after correction.', '', 'Partner chosen differs from the nearest available robot (share of requests): '
+    L += ['', '\\* p < 0.05.', '', 'Partner chosen differs from the nearest available robot (share of requests): '
           + ', '.join(f"{sc} {sc_st['rows'][f'dmorph_{sc}']['non_nearest_pct']:.2f}%" for sc in S) + ' (D-MORPH).', '',
-          'Random-Sparse failed requests per episode (no link / same-role partner / busy partner) and stalled episodes '
+          '### Diagnostics (Table 4, remaining columns; mean ± SD over seeds)', '',
+          'Refused: share of partner requests refused; idle: share of steps without a task; task time: steps from assignment to '
+          'delivery and to return; queue wait: steps from a request entering the queue to its assignment (requests assigned within '
+          'the episode only); clashes and stucks: the benchmark counters per episode.', '',
+          '| Scale | Method | Refused (%) | Idle AGV (%) | Idle Picker (%) | To delivery | To return | Queue wait | Clashes | Stucks |',
+          '|---|---|---|---|---|---|---|---|---|---|']
+    for sc in S:
+        for m in C.METHODS:
+            d = dg[f'{m}_{sc}']; f = lambda k, n=1: f"{d[k][0]:.{n}f} ± {d[k][1]:.{n}f}"
+            L.append(f"| {sc.capitalize()} | {C.LABELS[m]} | {f('refused', 0)} | {f('idle_agv')} | {f('idle_picker')} | {f('to_delivery')} | "
+                     f"{f('to_return')} | {f('queue_wait')} | {f('clashes')} | {f('stucks')} |")
+    L += ['', 'Random-Sparse failed requests per episode (no link / same-role partner / busy partner) and stalled episodes '
           '(no delivery in the last 200 steps):', '', '| Scale | Variant | No link | Same role | Busy | Stalled |', '|---|---|---|---|---|---|']
     for sc in S:
         for m in ('random_fixed', 'random_step'):
@@ -539,26 +658,36 @@ def results_md(sc_st, best_prox, ab, sh, em):
             L.append(f"| {sc.capitalize()} | {C.LABELS[m]} | {f['no_link']:.0f} | {f['same_role']:.0f} | {f['busy']:.0f} | {v['stalled']}/20 |")
     L += ['', '## Proximity-r sweep (Figure 4)', '', 'Highest-throughput radius per scale: '
           + ', '.join(f"{sc} r = {b['r']} ({b['deliveries']:.1f} deliveries, {b['links']:.1f} links)" for sc, b in best_prox.items()) + '.', '',
-          '## Ablations (Figure 5)', '', f'Paired Wilcoxon against full D-MORPH, Bonferroni alpha = {ab["alpha"]:.4f}.', '',
-          '| Scale | Variant | Deliveries | vs D-MORPH | Links | Links vs D-MORPH | p |', '|---|---|---|---|---|---|---|']
-    for sc in S:
-        for a_, lab in C.ABLATION_LABELS.items():
-            t = ab['tests'][f'{a_}_{sc}']
-            L.append(f"| {sc.capitalize()} | {lab} | {t['deliveries']:.1f} | {100 * (t['rel'] - 1):+.1f}% | {t['links']:.1f} | "
-                     f"{100 * (t['links_rel'] - 1):+.0f}% | {t['p']:.4f}{' *' if t['significant'] else ''} |")
+          '## Rule ablations (Figure 5; deliveries in docs/tables/table_ablation_deliveries.tex)', '',
+          'Full D-MORPH against D-MORPH with one rule removed, same seeds. Each ablation has one primary measure fixed before the '
+          'runs (docs/ablation_hypotheses.md): '
+          'No completion credit (R1), No homeostasis (R2), No predictive formation (R3) and Frozen structure (R3, no link formation or '
+          'pruning after step 400) are pre-specified; No R4 (BCM decay and neuromodulation both off) was added afterwards; the two '
+          'R4 component tests (No BCM threshold, No neuromodulation) are pre-specified but are not reported in the manuscript. '
+          'Setting: scale study (T = 800) or location shift (T = 2400).', '',
+          '| Ablation | Setting | Scale | Primary measure | Full | Ablation | Full minus ablation, p | Deliveries full / ablation (p) |',
+          '|---|---|---|---|---|---|---|---|']
+    for a_, kind, key, f, measure in ABL_PRIMARY:
+        for sc in (S if kind == 'scale' else C.SHIFT_SCALES):
+            t = ab[f'{a_}_{sc}']
+            L.append(f"| {C.ABLATION_LABELS[a_]} | {kind} | {sc.capitalize()} | {measure} | {t['full']:.4g} | {t['ablation']:.4g} | "
+                     f"{t['diff']:+.3g}, {p4(t['p'])}{' *' if t['p'] < 0.05 else ''} | {t['deliveries_full']:.1f} / "
+                     f"{t['deliveries_ablation']:.1f} (p = {t['deliveries_p']:.3f}) |")
     L += ['', '## Package location shift (Table 5, Figure 6)', '', f"Demand alternates between the upper and lower half every 400 steps "
-          f"(share of new requests in the active half: {sh['zone_share']:.3f}). Δ̄ = ((P5 − P3) + (P6 − P4)) / 2; retention: first 100 "
-          f"steps after a shift relative to the last 100 of the previous same-half phase; r̄: mean recovery time (MORPH's definition). "
-          f"Bonferroni alpha = {sh['alpha']:.4f} over Δ̄ and retention.", '',
-          '| Scale | Method | P1–P6 | Δ̄ | Retention | r̄ (steps) | Stalled | D-MORPH minus method: Δ̄ [95% CI], p |', '|---|---|---|---|---|---|---|---|']
+          f"(share of new requests in the active half: {sh['zone_share']:.3f}). Δ̄ = ((P5 − P3) + (P6 − P4)) / 2 (negative: fewer deliveries "
+          f"on the later visit to the same region); retention: first 100 steps after a shift relative to the last 100 of the previous "
+          f"same-half phase; r̄: mean recovery time (MORPH's definition). D-MORPH minus each baseline, paired by seed.", '',
+          '| Scale | Method | P1–P6 | Δ̄ | Retention | r̄ (steps) | Stalled | Δ̄: D-MORPH minus method [95% CI], p | r̄: D-MORPH minus method, p |',
+          '|---|---|---|---|---|---|---|---|---|']
     for sc in C.SHIFT_SCALES:
         for m in ['dmorph'] + BASE:
             v = sh['methods'][f'{m}_{sc}']
-            tst = '' if m == 'dmorph' else (lambda t: f"{t['diff']:+.2f} [{t['lo']:+.2f}, {t['hi']:+.2f}], p = {t['p']:.4f}"
-                                                     f"{' *' if t['significant'] else ''}")(sh['tests'][f'dbar_{m}_{sc}'])
+            fmt = lambda t: f"{t['diff']:+.2f} [{t['lo']:+.2f}, {t['hi']:+.2f}], p = {t['p']:.4f}{' *' if t['significant'] else ''}"
+            td = '' if m == 'dmorph' else fmt(sh['tests'][f'dbar_{m}_{sc}'])
+            tr_ = '' if m == 'dmorph' else (lambda t: f"{t['diff']:+.1f}, {p4(t['p'])}{' *' if t['significant'] else ''}")(sh['tests'][f'rbar_{m}_{sc}'])
             L.append(f"| {sc.capitalize()} | {C.LABELS[m]} | {' '.join(f'{x:.1f}' for x in v['P'])} | {v['dbar']:+.2f} | {v['tr']:.3f} | "
-                     f"{v['rbar']:.1f} | {v['stalled']}/20 | {tst} |")
-    L += ['', '## Emergent allocation structure (Figure 7)', '', f"Medium, seed 42, T = 1500: {em['deliveries']} deliveries. After step 200, "
+                     f"{v['rbar']:.1f} | {v['stalled']}/20 | {td} | {tr_} |")
+    L += ['', '\\* p < 0.05.', '', '## Emergent allocation structure (Figure 7)', '', f"Medium, seed 42, T = 1500: {em['deliveries']} deliveries. After step 200, "
           f"{em['agv_picker']:.1f} AGV–Picker, {em['agv_agv']:.1f} AGV–AGV and {em['picker_picker']:.1f} Picker–Picker links on average; "
           f"mean preference on links {em['w_mean']:.3f}. {em['pruned']} links pruned (median lifetime {em['lifetime_median']:.0f} steps; "
           f"{100 * em['share_after_grace']:.0f}% pruned at 21–22 steps, {100 * em['share_over_100']:.0f}% lived longer than 100 steps); "
@@ -568,15 +697,15 @@ def results_md(sc_st, best_prox, ab, sh, em):
 
 
 def main():
-    R, F, Ab, Sh, em = (load(k) for k in ('scale', 'frontier', 'ablation', 'shift', 'emergent'))
-    R, F, Ab, Sh = R['records'], F['records'], Ab['records'], Sh['records']
-    sc_st = scale_stats(R); table4(sc_st); fig3_scale(R)
+    R, F, Ab, Sh, em, M = (load(k) for k in ('scale', 'frontier', 'ablation', 'shift', 'emergent', 'mechanism'))
+    R, F, Ab, Sh, M = R['records'], F['records'], Ab['records'], Sh['records'], M['records']
+    sc_st = scale_stats(R); dg = diag_stats(M); table4(sc_st, dg); fig3_scale(R)
     best_prox = fig4_frontier(R, F)
-    ab = fig5_ablation(R, Ab)
+    fig5_ablation(Ab); ab = ablation_stats(Ab); table_ablation_deliveries(Ab)
     sh = shift_stats(Sh); table5(sh); fig6_shift(Sh, sh)
     em_st = fig7_emergent(em)
     fig2_environment()
-    results_md(sc_st, best_prox, ab, sh, em_st)
+    results_md(sc_st, dg, best_prox, ab, sh, em_st)
 
 
 if __name__ == '__main__':

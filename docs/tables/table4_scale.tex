@@ -1,0 +1,48 @@
+\begin{table}[!ht]
+\centering
+\caption{TA-RWARE scale study ($T=800$, 20 seeds; mean $\pm$ SD over episodes). \%FG denotes deliveries as a percentage of Full Graph performance. Links reports the mean number of active links, with the percentage of the maximum possible links in parentheses. A task is one requested shelf; it is assigned when its robots are committed to it. Refused: share of partner requests in an episode that were refused (0 if no request was made). Idle: share of steps in which an AGV or a Picker has no task. Task time: steps from assignment until the shelf is delivered, and until it is returned to a shelf location.}
+\label{tab:main}
+\footnotesize
+\begin{tabular}{lrrrrrrrr}
+\hline
+ & & & & Refused & \multicolumn{2}{c}{Idle (\%)} & \multicolumn{2}{c}{Task time (steps)} \\
+Method & Deliveries & \%FG & Links (\%max) & (\%) & AGV & Picker & to delivery & to return \\
+\hline
+\multicolumn{9}{l}{\textit{Tiny} ($N=8$)} \\
+Full Graph & 55.4\,$\pm$\,8.6 & 100\% & 28.0 (100\%) & 0 & 1.3\,$\pm$\,0.2 & 6.0\,$\pm$\,1.5 & 42.7\,$\pm$\,2.2 & 67.8\,$\pm$\,3.0 \\
+\textbf{D-MORPH} & \textbf{56.8\,$\pm$\,5.0} & \textbf{103\%} & \textbf{6.6 (23\%)} & \textbf{72\,$\pm$\,3} & \textbf{2.1\,$\pm$\,0.2} & \textbf{9.6\,$\pm$\,1.3} & \textbf{31.0\,$\pm$\,1.0} & \textbf{67.5\,$\pm$\,3.6} \\
+MORPH (centralised) & 53.3\,$\pm$\,9.6 & 96\% & 21.5 (77\%) & 70\,$\pm$\,3 & 1.3\,$\pm$\,0.2 & 11.0\,$\pm$\,2.4 & 41.0\,$\pm$\,4.3 & 70.9\,$\pm$\,8.1 \\
+Proximity-$r$ & 53.5\,$\pm$\,12.8 & 97\% & 10.7 (38\%) & 53\,$\pm$\,5 & 1.3\,$\pm$\,0.3 & 7.9\,$\pm$\,2.0 & 39.1\,$\pm$\,5.3 & 68.2\,$\pm$\,8.3 \\
+Random-Sparse (fixed) & 16.1\,$\pm$\,15.7 & 29\% & 6.0 (21\%) & 40\,$\pm$\,23 & 72.9\,$\pm$\,22.1 & 77.5\,$\pm$\,20.1 & 26.5\,$\pm$\,4.1 & 44.4\,$\pm$\,12.4 \\
+Random-Sparse (per-step) & 35.5\,$\pm$\,13.6 & 64\% & 6.0 (21\%) & 40\,$\pm$\,6 & 16.9\,$\pm$\,7.4 & 13.7\,$\pm$\,5.4 & 33.3\,$\pm$\,2.9 & 77.9\,$\pm$\,9.1 \\
+TSG & 53.3\,$\pm$\,8.8 & 96\% & 2.6 (9\%) & 75\,$\pm$\,3 & 1.3\,$\pm$\,0.2 & 12.6\,$\pm$\,2.5 & 41.4\,$\pm$\,3.9 & 71.5\,$\pm$\,10.3 \\
+\hline
+\multicolumn{9}{l}{\textit{Small} ($N=12$)} \\
+Full Graph & 64.6\,$\pm$\,6.5 & 100\% & 66.0 (100\%) & 0 & 1.0\,$\pm$\,0.1 & 4.1\,$\pm$\,0.5 & 64.7\,$\pm$\,7.1 & 95.8\,$\pm$\,8.3 \\
+\textbf{D-MORPH} & \textbf{66.0\,$\pm$\,8.0} & \textbf{102\%} & \textbf{11.4 (17\%)} & \textbf{72\,$\pm$\,3} & \textbf{2.1\,$\pm$\,0.2} & \textbf{5.7\,$\pm$\,0.9} & \textbf{40.5\,$\pm$\,1.2} & \textbf{93.6\,$\pm$\,7.7} \\
+MORPH (centralised) & 64.0\,$\pm$\,5.0 & 99\% & 22.8 (34\%) & 72\,$\pm$\,2 & 0.9\,$\pm$\,0.1 & 7.1\,$\pm$\,0.9 & 57.7\,$\pm$\,3.5 & 96.3\,$\pm$\,4.6 \\
+Proximity-$r$ & 66.8\,$\pm$\,6.3 & 103\% & 15.1 (23\%) & 61\,$\pm$\,3 & 1.0\,$\pm$\,0.1 & 5.9\,$\pm$\,1.0 & 54.8\,$\pm$\,3.6 & 91.5\,$\pm$\,5.0 \\
+Random-Sparse (fixed) & 18.8\,$\pm$\,12.9 & 29\% & 12.0 (18\%) & 41\,$\pm$\,20 & 72.1\,$\pm$\,14.4 & 69.7\,$\pm$\,19.6 & 34.0\,$\pm$\,7.0 & 59.5\,$\pm$\,15.4 \\
+Random-Sparse (per-step) & 33.1\,$\pm$\,14.8 & 51\% & 12.0 (18\%) & 42\,$\pm$\,8 & 21.8\,$\pm$\,9.9 & 8.9\,$\pm$\,3.9 & 44.8\,$\pm$\,4.4 & 110.4\,$\pm$\,9.7 \\
+TSG & 64.9\,$\pm$\,3.7 & 100\% & 3.7 (6\%) & 74\,$\pm$\,2 & 1.0\,$\pm$\,0.1 & 7.8\,$\pm$\,0.9 & 57.4\,$\pm$\,2.8 & 94.8\,$\pm$\,2.9 \\
+\hline
+\multicolumn{9}{l}{\textit{Medium} ($N=18$)} \\
+Full Graph & 84.2\,$\pm$\,7.5 & 100\% & 153.0 (100\%) & 0 & 0.8\,$\pm$\,0.1 & 3.5\,$\pm$\,0.3 & 73.6\,$\pm$\,4.1 & 107.6\,$\pm$\,4.5 \\
+\textbf{D-MORPH} & \textbf{90.7\,$\pm$\,2.5} & \textbf{108\%} & \textbf{17.6 (12\%)} & \textbf{72\,$\pm$\,2} & \textbf{2.2\,$\pm$\,0.2} & \textbf{4.6\,$\pm$\,0.2} & \textbf{44.4\,$\pm$\,1.1} & \textbf{104.3\,$\pm$\,2.6} \\
+MORPH (centralised) & 88.3\,$\pm$\,2.1 & 105\% & 20.3 (13\%) & 74\,$\pm$\,2 & 0.9\,$\pm$\,0.0 & 5.5\,$\pm$\,0.3 & 64.5\,$\pm$\,1.8 & 105.1\,$\pm$\,2.5 \\
+Proximity-$r$ & 85.4\,$\pm$\,12.8 & 101\% & 24.0 (16\%) & 64\,$\pm$\,2 & 0.8\,$\pm$\,0.1 & 4.4\,$\pm$\,0.8 & 64.3\,$\pm$\,3.9 & 104.6\,$\pm$\,7.0 \\
+Random-Sparse (fixed) & 12.4\,$\pm$\,11.4 & 15\% & 18.0 (12\%) & 45\,$\pm$\,21 & 82.3\,$\pm$\,12.6 & 82.0\,$\pm$\,15.5 & 37.1\,$\pm$\,6.5 & 61.5\,$\pm$\,13.7 \\
+Random-Sparse (per-step) & 47.1\,$\pm$\,17.4 & 56\% & 18.0 (12\%) & 42\,$\pm$\,4 & 19.9\,$\pm$\,6.1 & 8.8\,$\pm$\,3.3 & 49.8\,$\pm$\,4.9 & 128.4\,$\pm$\,21.7 \\
+TSG & 86.2\,$\pm$\,5.5 & 102\% & 5.7 (4\%) & 75\,$\pm$\,2 & 0.8\,$\pm$\,0.1 & 5.6\,$\pm$\,0.5 & 65.4\,$\pm$\,2.8 & 106.8\,$\pm$\,3.9 \\
+\hline
+\multicolumn{9}{l}{\textit{Large} ($N=24$)} \\
+Full Graph & 99.2\,$\pm$\,3.4 & 100\% & 276.0 (100\%) & 0 & 0.7\,$\pm$\,0.0 & 3.1\,$\pm$\,0.1 & 84.1\,$\pm$\,3.0 & 123.7\,$\pm$\,3.7 \\
+\textbf{D-MORPH} & \textbf{104.3\,$\pm$\,6.4} & \textbf{105\%} & \textbf{23.5 (9\%)} & \textbf{73\,$\pm$\,2} & \textbf{2.1\,$\pm$\,0.3} & \textbf{3.8\,$\pm$\,0.4} & \textbf{53.6\,$\pm$\,2.0} & \textbf{120.2\,$\pm$\,5.2} \\
+MORPH (centralised) & 101.3\,$\pm$\,6.5 & 102\% & 28.7 (10\%) & 75\,$\pm$\,1 & 0.7\,$\pm$\,0.0 & 4.6\,$\pm$\,0.4 & 75.7\,$\pm$\,4.9 & 122.0\,$\pm$\,5.8 \\
+Proximity-$r$ & 104.2\,$\pm$\,7.5 & 105\% & 30.8 (11\%) & 68\,$\pm$\,2 & 0.8\,$\pm$\,0.1 & 4.2\,$\pm$\,0.5 & 72.2\,$\pm$\,3.6 & 116.5\,$\pm$\,4.3 \\
+Random-Sparse (fixed) & 24.4\,$\pm$\,12.6 & 25\% & 24.0 (9\%) & 46\,$\pm$\,11 & 76.4\,$\pm$\,11.1 & 75.6\,$\pm$\,12.8 & 42.4\,$\pm$\,5.9 & 72.9\,$\pm$\,11.4 \\
+Random-Sparse (per-step) & 70.8\,$\pm$\,14.4 & 71\% & 24.0 (9\%) & 41\,$\pm$\,4 & 15.2\,$\pm$\,3.5 & 10.8\,$\pm$\,2.5 & 59.4\,$\pm$\,3.3 & 144.5\,$\pm$\,9.2 \\
+TSG & 100.3\,$\pm$\,3.7 & 101\% & 7.9 (3\%) & 75\,$\pm$\,1 & 0.7\,$\pm$\,0.0 & 4.7\,$\pm$\,0.4 & 76.5\,$\pm$\,2.8 & 122.5\,$\pm$\,3.6 \\
+\hline
+\end{tabular}
+\end{table}

@@ -1,0 +1,41 @@
+\begin{table}[htbp]
+\centering
+\caption{Deliveries per episode for each rule ablation (mean $\pm$ SD). Each ablation is compared with full D-MORPH on the same seeds and in the same setting; $\Delta$: ablation minus full D-MORPH; $p$: paired two-sided Wilcoxon test. The primary measure of each ablation is reported in Figure~5.}
+\label{tab:ablation_deliveries}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lllrrrr}
+\hline
+Ablation & Setting & Scale & Full D-MORPH & Ablation & $\Delta$ & $p$ \\
+\hline
+No completion credit (R1) & scale study, $T=800$ & Tiny & 56.8\,$\pm$\,5.0 & 56.1\,$\pm$\,7.6 & -0.7 & 0.570 \\
+ &  & Small & 66.0\,$\pm$\,8.0 & 66.9\,$\pm$\,5.8 & +0.9 & 0.824 \\
+ &  & Medium & 90.7\,$\pm$\,2.5 & 90.2\,$\pm$\,3.0 & -0.6 & 0.457 \\
+ &  & Large & 104.3\,$\pm$\,6.4 & 105.3\,$\pm$\,4.5 & +1.1 & 0.727 \\
+\hline
+No homeostasis (R2) & scale study, $T=800$ & Tiny & 56.8\,$\pm$\,5.0 & 54.1\,$\pm$\,8.7 & -2.7 & 0.311 \\
+ &  & Small & 66.0\,$\pm$\,8.0 & 66.3\,$\pm$\,7.8 & +0.3 & 0.511 \\
+ &  & Medium & 90.7\,$\pm$\,2.5 & 90.8\,$\pm$\,2.7 & +0.1 & 0.461 \\
+ &  & Large & 104.3\,$\pm$\,6.4 & 104.3\,$\pm$\,6.4 & +0.0 & 1.000 \\
+\hline
+No predictive formation (R3) & scale study, $T=800$ & Tiny & 56.8\,$\pm$\,5.0 & 56.7\,$\pm$\,4.9 & -0.1 & 0.684 \\
+ &  & Small & 66.0\,$\pm$\,8.0 & 65.7\,$\pm$\,7.7 & -0.3 & 0.180 \\
+ &  & Medium & 90.7\,$\pm$\,2.5 & 90.5\,$\pm$\,2.3 & -0.2 & 0.344 \\
+ &  & Large & 104.3\,$\pm$\,6.4 & 104.0\,$\pm$\,6.0 & -0.3 & 0.720 \\
+\hline
+No R4 & scale study, $T=800$ & Tiny & 56.8\,$\pm$\,5.0 & 54.9\,$\pm$\,6.8 & -1.9 & 0.213 \\
+ &  & Small & 66.0\,$\pm$\,8.0 & 66.5\,$\pm$\,6.3 & +0.6 & 0.897 \\
+ &  & Medium & 90.7\,$\pm$\,2.5 & 90.0\,$\pm$\,2.5 & -0.8 & 0.292 \\
+ &  & Large & 104.3\,$\pm$\,6.4 & 105.5\,$\pm$\,2.6 & +1.1 & 0.815 \\
+\hline
+Frozen structure (R3) & location shift, $T=2400$ & Medium & 257.6\,$\pm$\,31.8 & 244.2\,$\pm$\,33.0 & -13.4 & 0.022 \\
+ &  & Large & 297.4\,$\pm$\,36.2 & 301.6\,$\pm$\,29.6 & +4.2 & 0.881 \\
+\hline
+No BCM threshold (R4a) & location shift, $T=2400$ & Medium & 257.6\,$\pm$\,31.8 & 258.9\,$\pm$\,27.7 & +1.4 & 0.887 \\
+ &  & Large & 297.4\,$\pm$\,36.2 & 294.5\,$\pm$\,32.7 & -2.9 & 0.668 \\
+\hline
+No neuromodulation (R4b) & location shift, $T=2400$ & Medium & 257.6\,$\pm$\,31.8 & 250.0\,$\pm$\,33.8 & -7.6 & 0.344 \\
+ &  & Large & 297.4\,$\pm$\,36.2 & 294.2\,$\pm$\,45.5 & -3.1 & 0.740 \\
+\hline
+\end{tabular}
+\end{table}

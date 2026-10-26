@@ -22,10 +22,12 @@ TUNED_PARAMS = dict(
     theta_form_anneal=100,              # steps over which theta_form anneals from start to end
     theta_prune=0.012846351512931578,
     grace_steps=20,                     # a new link cannot be pruned before this age
-    k_slow=1,                           # structural update every k_slow steps
+    k_slow=1,                           # R3 structural update every k_slow steps (1: every step)
     mi_window=20,                       # steps of co-assignment history behind C_ij
     max_new_local=1,                    # links formed per robot per structural step
     pred_boost=0.4,                     # weight of the proposal hint P_ij in formation
+    structure_until=None,               # ablation only: no formation or pruning after this step (None: never stops)
+    bounded=True,                       # w_i[j] clipped to [0, 1]; False (R4 experiment only): clipped below at 0
     # R4 metaplastic
     bcm_tau=0.9619711638744608,         # BCM threshold smoothing
     bcm_gain=0.5,

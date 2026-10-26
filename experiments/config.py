@@ -27,22 +27,39 @@ EMERGENT_SNAPSHOTS = (99, 199, 399, 799, 1499)
 # -> i requests a partner by its own preferences -> the partner accepts with 0.25 + 0.75 w_j[i]).
 METHODS = ['full', 'dmorph', 'morph', 'proximity', 'random_fixed', 'random_step', 'tsg']
 LABELS = {'full': 'Full Graph', 'dmorph': 'D-MORPH', 'morph': 'MORPH (centralised)', 'proximity': 'Proximity-r',
-          'random_fixed': 'Random-Sparse (fixed)', 'random_step': 'Random-Sparse (per-step)', 'tsg': 'TSG'}
+          'random_fixed': 'Random-Sparse (fixed)', 'random_step': 'Random-Sparse (per-step)', 'tsg': 'TSG',
+          'uniform': 'Dense-Uniform', 'cbaa': 'CBAA-Partner'}
+# Uniform control: pair allocation, all pairs linked, every w_i[j] frozen at one value (no learning).
+# 0: D-MORPH's response floor (accept 0.25); 0.055: accept 0.29, D-MORPH's observed acceptance rate in the
+# scale study; 1: always accept, as Full Graph
+UNIFORM_W = [0.0, 0.055, 1.0]
+# Partner experiment: half of the Pickers move at 1/SLOW_FACTOR speed (hidden); 'swap' exchanges slow and fast
+# Pickers at SWAP_AT. Conditions differ only in partner selection (D-MORPH allocation procedure, response
+# 0.25 + 0.75 x 0.055 for the non-learning conditions, the acceptance rate observed for D-MORPH)
+SLOW_FACTOR, SWAP_AT = 3, 400
+PARTNER_METHODS = [('dmorph', None), ('uniform', 0.055), ('random_partner', 0.055), ('oracle_fast', 0.055)]
 PROX_R = 5                                 # Proximity radius in the scale and shift experiments
 PROX_GRID = list(range(1, 13))             # radii of the Proximity-r sweep (Figure 4)
 # Random-Sparse link budget: D-MORPH's mean number of links on development seeds, rounded
 RANDOM_LINKS = {'tiny': 6, 'small': 12, 'medium': 18, 'large': 24}
 
-# D-MORPH ablations: one or more mechanisms switched off, everything else unchanged
+# D-MORPH rule ablations (docs/ablation_hypotheses.md): one rule switched off, everything else unchanged.
+# Scale study (T = 800): noreward (R1), nohomeo (R2), nopred (R3 predictive formation), nor4 (R4, both parts).
+# Location shift (T = 2400, Medium and Large): nostruct (R3 frozen after step 400). nobcm and noneuro are the two
+# pre-specified R4 component tests (location shift); the manuscript reports the combined ablation nor4 only.
 ABLATIONS = {
-    'v1':       dict(bcm_gain=0.0, reward_alpha=0.0, neuromod_gain=0.0, neuromod_explore=0.0, pred_boost=0.0),
+    'noreward': dict(reward_alpha=0.0),                                            # R1 completion credit off
+    'nohomeo':  dict(beta=0.0),                                                    # R2 off: H_i stays at its initial value
+    'nopred':   dict(pred_boost=0.0),                                              # R3 predictive hint off
+    'nor4':     dict(bcm_gain=0.0, neuromod_gain=0.0, neuromod_explore=0.0),       # R4: BCM decay and neuromodulation off
+    'nostruct': dict(structure_until=400),                                         # R3 frozen: no formation or pruning after step 400
     'nobcm':    dict(bcm_gain=0.0),
-    'noreward': dict(reward_alpha=0.0),
     'noneuro':  dict(neuromod_gain=0.0, neuromod_explore=0.0),
-    'nopred':   dict(pred_boost=0.0),
 }
-ABLATION_LABELS = {'v1': 'v1 (R1-R3)', 'nobcm': 'no BCM threshold', 'noreward': 'no reward credit',
-                   'noneuro': 'no neuromodulation', 'nopred': 'no predictive formation'}
+NOSTRUCT = ABLATIONS['nostruct']
+ABLATION_LABELS = {'noreward': 'No completion credit (R1)', 'nohomeo': 'No homeostasis (R2)',
+                   'nopred': 'No predictive formation (R3)', 'nostruct': 'Frozen structure (R3)',
+                   'nor4': 'No R4', 'nobcm': 'No BCM threshold (R4a)', 'noneuro': 'No neuromodulation (R4b)'}
 
 # Centralised MORPH: the published MORPH parameters (Optuna TPE search on TA-RWARE)
 MORPH_PARAMS = dict(

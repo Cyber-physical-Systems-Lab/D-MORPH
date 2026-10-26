@@ -55,6 +55,7 @@ class DMORPH:
         self.ng, self.ne_explore, self.fast, self.slow = p['neuromod_gain'], p['neuromod_explore'], p['neuromod_ema'], p['slow_ema']
         self.pred_boost, self.cov, self.burst_thresh = p['pred_boost'], p['cov'], p['burst_thresh']
         self.window, self.mi_window, self.max_new_local = p['window'], p['mi_window'], p['max_new_local']
+        self.structure_until, self.bounded = p['structure_until'], p['bounded']
 
         self.t = 0
         self.W = np.zeros((N, N)); self.A = np.zeros((N, N))          # row i: robot i's preferences and links
@@ -68,6 +69,7 @@ class DMORPH:
         self.cur_tok, self.cum = [None] * N, [set() for _ in range(N)]  # 'task' settlement bookkeeping
         # histories (measurement only)
         self.ne_h, self.W_mean_h, self.eta_h, self.form_h, self.prune_h = [], [], [], [], []
+        self.induced_h = []                                            # formations below theta_form (arousal-induced)
         self.life = []                                                 # lifetimes of pruned links (steps)
 
     # ── observations ─────────────────────────────────────────────────────────
@@ -178,14 +180,14 @@ class DMORPH:
             credit = np.where(self._jt > self.burst_thresh, self._jt, 0.0)
             self.W += self.reward_alpha * R * credit * self.A
             self._jt[:] = 0.0
-        np.clip(self.W, 0.0, 1.0, out=self.W); np.fill_diagonal(self.W, 0.0)
+        np.clip(self.W, 0.0, 1.0 if self.bounded else None, out=self.W); np.fill_diagonal(self.W, 0.0)
         # R2 homeostasis
         self.H += self.beta * (self.target_deg - self.A.sum(axis=1)) / (N - 1)
         np.clip(self.H, 0.0, 1.0, out=self.H)
 
         # R3 structural plasticity
-        formed = pruned = 0
-        if self.t % self.k_slow == 0:
+        formed = pruned = induced = 0
+        if self.t % self.k_slow == 0 and (self.structure_until is None or self.t <= self.structure_until):
             pm = (self.A > 0) & (self.W < self.tp) & (self.age > self.grace)
             pruned = int(pm.sum())
             self.life.extend(self.age[pm].tolist())
@@ -198,6 +200,7 @@ class DMORPH:
                     j = int(np.argmax(score[i]))
                     if score[i, j] < tf_i[i] or score[i, j] <= 0:
                         break
+                    induced += int(score[i, j] < self.theta_form)        # formed only because arousal lowered the threshold
                     self.A[i, j] = 1.0; self.age[i, j] = 0.0; score[i, j] = -1.0
                     formed += 1
         self.age = np.where(self.A > 0, self.age + 1, 0.0)
@@ -205,3 +208,4 @@ class DMORPH:
         self.ne_h.append(int(np.triu(und, 1).sum()))
         self.W_mean_h.append(float(self.W[self.A > 0].mean()) if self.A.any() else 0.0)
         self.eta_h.append(float(eta.mean())); self.form_h.append(formed); self.prune_h.append(pruned)
+        self.induced_h.append(induced)

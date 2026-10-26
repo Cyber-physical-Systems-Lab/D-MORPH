@@ -19,4 +19,4 @@ def select_partner(prefs_i, candidates, distance):
 
 def accepts(w_ji, rng=np.random):
     """Robot j's response to robot i, given its preference w_j[i] in [0, 1]."""
-    return rng.random() < RESPONSE_FLOOR + (1.0 - RESPONSE_FLOOR) * w_ji
+    return rng.random() < RESPONSE_FLOOR + (1.0 - RESPONSE_FLOOR) * min(max(w_ji, 0.0), 1.0)

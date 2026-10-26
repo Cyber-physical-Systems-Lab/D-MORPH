@@ -9,6 +9,11 @@ carried over from MORPH's experiment loop:
   each AGV task the nearest free Picker is proposed and responds with probability 0.25 + 0.75 x, where x is
   the link (A) or preference (W) between them (always 1 for Full Graph).
 
+  CBAA-Partner (Choi et al., 2009, converged single-assignment form): for each pending request the nearest
+  available robot is the primary robot; every available robot of the complementary role bids -distance to the
+  request, and claims are resolved greedily on the highest bid; the winner is assigned without a response
+  step. AGVs that need a Picker again (returning the shelf) are served by the same greedy auction.
+
   Pair allocation (D-MORPH, Random-Sparse): the oldest pending request goes to the nearest available robot i
   (AGV or Picker); i requests a partner j of the complementary role by its own preferences (dmorph.allocation)
   and j accepts with probability 0.25 + 0.75 w_j[i]; a refused request is retried at the next step. An AGV
@@ -34,7 +39,8 @@ from experiments.signals import (get_current_targets, compute_coassign_jaccard, 
 warnings.filterwarnings('ignore')
 ENV_ID = {name: env for name, env, _ in C.SCALES}
 LOOP_METHODS = ('full', 'morph', 'proximity', 'tsg')               # MORPH's allocation loop
-PAIR_METHODS = ('dmorph', 'random_fixed', 'random_step')           # pair allocation
+AUCTION_METHODS = ('cbaa',)                                        # greedy auction (CBAA-Partner)
+PAIR_METHODS = ('dmorph', 'random_fixed', 'random_step', 'uniform', 'random_partner', 'oracle_fast')  # pair allocation
 
 
 def _install_shift(u):
@@ -98,6 +104,38 @@ def _install_shift(u):
     return state
 
 
+def _install_slow_pickers(u, agents, seed, kind):
+    """Hidden partner effectiveness: half of the Pickers move at 1/SLOW_FACTOR speed (on two of every three
+    steps a movement micro-action is replaced by a no-op after TA-RWARE has resolved the macro-actions);
+    nothing a robot observes reveals which. kind 'static': the same Pickers are slow all episode; 'swap': slow
+    and fast Pickers swap at step SWAP_AT. Returns t -> boolean mask over agents of the Pickers slow at step t."""
+    from tarware.definitions import Action
+    pk = [i for i, a in enumerate(agents) if a.type == AgentType.PICKER]
+    rng = np.random.default_rng(seed + 7777)
+    slow = set(rng.choice(pk, size=len(pk) // 2, replace=False).tolist()); fast = set(pk) - slow
+    N = len(agents)
+
+    def slow_mask(t):
+        m = np.zeros(N, dtype=bool)
+        m[list(slow if (kind == 'static' or t < C.SWAP_AT) else fast)] = True
+        return m
+
+    orig, state = u.attribute_macro_actions, {'t': 0}
+
+    def patched(macro_actions):
+        out = orig(macro_actions)
+        t = state['t']
+        if t % C.SLOW_FACTOR != 0:
+            for i in np.flatnonzero(slow_mask(t)):
+                if agents[i].req_action in (Action.FORWARD, Action.LEFT, Action.RIGHT):
+                    agents[i].req_action = Action.NOOP
+        state['t'] += 1
+        return out
+
+    u.attribute_macro_actions = patched
+    return slow_mask
+
+
 def _random_graph(N, k, rs_links, rs_w):
     """k random undirected links among all robot pairs (same-role pairs included), with independent directed
     preferences w_i[j] ~ U(0, 1) on them."""
@@ -138,9 +176,14 @@ def _task_obs(agents, assigned_agvs, assigned_pickers, agent_idx, agv_cycle):
     return tokens, direct
 
 
-def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, shift=False, recorder=None):
+def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, shift=False, recorder=None,
+                w_uniform=0.0, slow=None, response='paper'):
     """method: one of config.METHODS; params: D-MORPH parameter overrides (ablations); reward: D-MORPH credit
-    mode ('pair' as in the paper, 'task' settlement); r: Proximity radius; shift: package location shift.
+    mode ('pair' as in the paper, 'task' settlement); r: Proximity radius; shift: package location shift;
+    w_uniform: the frozen preference of every pair in the Uniform control (also the response of
+    'random_partner' and 'oracle_fast'); slow: None, 'static' or 'swap' (hidden slow Pickers);
+    response (D-MORPH only): 'paper' 0.25 + 0.75 w_j[i]; 'normalized' 0.25 + 0.75 w_j[i] / max_k w_j[k]
+    (robot j always accepts its most-preferred partner); 'always' every request is accepted.
     Returns a dict with per-step cumulative deliveries, active links and mean preference on links, the
     coordinator object (D-MORPH or MORPH), the agents and allocation counts."""
     env = gym.make(ENV_ID[scale])
@@ -158,8 +201,11 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
 
     coord = None; Wb = None
     A = np.zeros((N, N)); W = np.zeros((N, N))
-    if method == 'full':
+    if method in ('full', 'cbaa'):
         A = np.ones((N, N)) - np.eye(N); W = np.ones((N, N)) - np.eye(N)
+    elif method in ('uniform', 'random_partner', 'oracle_fast'):
+        # control: pair allocation with every pair linked and every w_i[j] frozen at w_uniform (no learning)
+        A = np.ones((N, N)) - np.eye(N); W = w_uniform * A
     elif method == 'morph':
         coord = MORPH(N, **C.morph_params(N, scale))
     elif method == 'dmorph':
@@ -167,27 +213,57 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
     elif method in ('random_fixed', 'random_step'):
         A, Wb = _random_graph(N, C.RANDOM_LINKS[scale], np.random.RandomState(12345 + seed), np.random.RandomState(777 + seed))
         redraw_rng = np.random.RandomState(4242 + seed)
-    elif method not in ('proximity', 'tsg'):
+    elif method not in ('proximity', 'tsg', 'cbaa'):
         raise ValueError(f'unknown method {method!r}; expected one of {C.METHODS}')
     pair = method in PAIR_METHODS
 
     shift_state = _install_shift(u) if shift else None
+    slow_mask = _install_slow_pickers(u, agents, seed, slow) if slow else None
+    sel = []                                                       # (t, chose a fast Picker) when both kinds were free
+    gap_h = []                                                     # AGVs' mean w to fast minus to slow Pickers
     target_hist = TargetHistory([a.id for a in agents]) if coord is not None else None
     assigned_agvs, assigned_pickers, assigned_items = OrderedDict(), OrderedDict(), OrderedDict()
     deliveries = 0
     deliv_h, link_h, w_mean_h = [], [], []
     stats = dict(requests=0, refusals=0, assign=0, non_nearest=0, no_link=0, same_role=0, busy=0)
     agv_cycle = {}
+    # congestion and waiting measurements (read only; no random draws)
+    cg = dict(proposals=0, refusals=0, clashes=0, stucks=0, agv_idle=0, active_missions=0, picking_missions=0,
+              wait_for_picker=0, queue_wait=[], cycle=[], agv_idle_steps=0, picker_idle_steps=0,
+              task_delivery=[], task_return=[], task_agv_wait=[], task_picker_wait=[], auctioned=0, resolved=0,
+              ts_proposals=[], ts_refusals=[], ts_agv_idle=[], ts_picker_idle=[], task_end_t=[])
+    queued, pick_start = {}, {}
+    task = {}                                                      # AGV -> its current task (one shelf cycle)
 
     def respond(j, i):
-        if method == 'full':
+        cg['proposals'] += 1
+        ok = _respond(j, i)
+        cg['refusals'] += int(not ok)
+        return ok
+
+    def _respond(j, i):
+        if method == 'full' or (method == 'dmorph' and response == 'always'):
             return True
-        return accepts(W[j, i] if method in ('dmorph', 'morph') else (Wb[j, i] if Wb is not None else A[j, i]))
+        if method == 'dmorph' and response == 'normalized':
+            top = W[j].max()
+            return accepts(W[j, i] / top if top > 0 else 0.0)
+        return accepts(W[j, i] if method in ('dmorph', 'morph', 'uniform', 'random_partner', 'oracle_fast') else (Wb[j, i] if Wb is not None else A[j, i]))
 
     def choose(i_, prim, cand, dist):
         """Pair allocation: the partner robot i_ requests, or None if the request fails this step."""
-        if method == 'dmorph':
-            j = select_partner(W[i_], [agent_idx[c.id] for c in cand], lambda q: dist(agents[q]))
+        if method in ('dmorph', 'uniform', 'random_partner', 'oracle_fast'):
+            ids = [agent_idx[c.id] for c in cand]
+            if method == 'random_partner':
+                j = ids[np.random.randint(len(ids))]
+            elif method == 'oracle_fast':                              # reference: knows the hidden speeds
+                sm = slow_mask(t)
+                j = min(ids, key=lambda q: (bool(sm[q]), dist(agents[q])))
+            else:
+                j = select_partner(W[i_], ids, lambda q: dist(agents[q]))
+            if slow_mask is not None and cand[0].type == AgentType.PICKER:
+                sm = slow_mask(t)
+                if any(sm[q] for q in ids) and not all(sm[q] for q in ids):
+                    sel.append((t, not bool(sm[j])))
             return agents[j]
         # Random-Sparse: the linked robot with the highest w_i[j], of either role (nearest on a tie). The request
         # fails if robot i has no link, or the chosen robot has the same role (it cannot serve the task) or is
@@ -207,13 +283,48 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
             shift_state['t'] = t
         rq, gls = u.request_queue, u.goals
         actions = {a: 0 for a in agents}
+        taken_items = set(assigned_items.values())
+        for item in rq:
+            if item.id not in taken_items:
+                queued.setdefault(item.id, t)                      # request waiting for an AGV since step t
 
         if method == 'random_step':
             # Random-Sparse (per-step): new random links (same budget) and preferences at every step
             A, Wb_new = _random_graph(N, C.RANDOM_LINKS[scale], redraw_rng, redraw_rng)
             Wb[:] = Wb_new
 
-        if pair:
+        if method == 'cbaa':
+            # new missions: nearest available robot is primary; complementary robots bid -distance; greedy
+            used, reqs = set(), []
+            for item in rq:
+                if item.id in assigned_items.values() or (item.y, item.x) not in coords_map:
+                    continue
+                av = [a for a in agvs if not a.busy and not a.carrying_shelf and a not in assigned_agvs and a not in used]
+                pk = [p for p in pickers if p not in assigned_pickers and p not in used]
+                if not av or not pk:
+                    continue
+                dist = (lambda it: (lambda a: abs(a.x - it.x) + abs(a.y - it.y)))(item)
+                prim = min(av + pk, key=dist)
+                used.add(prim)
+                reqs.append((item, prim, pk if prim.type == AgentType.AGV else av, dist))
+            bids = sorted(((-dist(c), k, c) for k, (item, prim, cand, dist) in enumerate(reqs) for c in cand
+                           if c not in used), key=lambda b: (-b[0], b[1], b[2].id))
+            cg['auctioned'] += len({k for _, k, _ in bids})            # requests with at least one bid
+            won, taken = set(), set()
+            for _, k, c in bids:
+                if k in won or c in taken:
+                    continue
+                won.add(k); taken.add(c)
+                item, prim, cand, dist = reqs[k]
+                cg['proposals'] += 1; cg['resolved'] += 1
+                stats['requests'] += 1; stats['assign'] += 1
+                stats['non_nearest'] += int(c is not min(cand, key=dist))
+                agv, pkr = (prim, c) if prim.type == AgentType.AGV else (c, prim)
+                loc = coords_map[(item.y, item.x)]
+                assigned_agvs[agv] = Mission(MissionType.PICKING, loc, item.x, item.y, t)
+                assigned_items[agv] = item.id
+                assigned_pickers[pkr] = Mission(MissionType.PICKING, loc, item.x, item.y, t)
+        elif pair:
             # new missions: oldest pending request -> nearest available robot -> its preferred partner
             for item in rq:
                 if item.id in assigned_items.values() or (item.y, item.x) not in coords_map:
@@ -260,6 +371,13 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
                 assigned_agvs[best] = Mission(MissionType.PICKING, coords_map[(item.y, item.x)], item.x, item.y, t)
                 assigned_items[best] = item.id
 
+        taken_items = set(assigned_items.values())
+        for sid in [s_ for s_ in queued if s_ in taken_items]:
+            cg['queue_wait'].append(t - queued.pop(sid))
+        for agv, m in assigned_agvs.items():
+            if m.mission_type == MissionType.PICKING:
+                pick_start.setdefault(agv, m.assigned_time)
+
         # AGV mission controller: pick up -> deliver -> return the shelf
         for agv in agvs:
             if agv in assigned_agvs:
@@ -285,6 +403,11 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
                     byx = u.action_id_to_coords_map[be]
                     assigned_agvs[agv] = Mission(MissionType.RETURNING, be, byx[1], byx[0], t)
             elif m.mission_type == MissionType.RETURNING and m.at_location and not agv.carrying_shelf:
+                tk = task.pop(agv, None)
+                if tk is not None and tk['deliv'] is not None:     # task assigned -> shelf delivered -> shelf returned
+                    cg['task_delivery'].append(tk['deliv'] - tk['start']); cg['task_return'].append(t - tk['start'])
+                    cg['task_end_t'].append(t)
+                    cg['task_agv_wait'].append(tk['agv_wait']); cg['task_picker_wait'].append(tk['picker_wait'])
                 assigned_agvs.pop(agv)
                 assigned_items.pop(agv, None)
             elif m.mission_type == MissionType.RETURNING and m.at_location and agv.carrying_shelf:
@@ -308,7 +431,26 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
 
         # Pickers for AGV tasks that need one (one Picker per location)
         picker_locs = {(mp.location_x, mp.location_y) for mp in assigned_pickers.values()}
-        for agv, m in assigned_agvs.items():
+        if method == 'cbaa':
+            # free Pickers bid -distance to every AGV task that needs one; greedy on the highest bid
+            reqs = [(agv, m) for agv, m in assigned_agvs.items()
+                    if m.mission_type in (MissionType.PICKING, MissionType.RETURNING)
+                    and (m.location_x, m.location_y) not in picker_locs]
+            pk = [p for p in pickers if p not in assigned_pickers]
+            bids = sorted(((-(abs(p.x - m.location_x) + abs(p.y - m.location_y)), k, p) for k, (agv, m) in enumerate(reqs)
+                           for p in pk), key=lambda b: (-b[0], b[1], b[2].id))
+            cg['auctioned'] += len({k for _, k, _ in bids})
+            won, taken = set(), set()
+            for _, k, p in bids:
+                if k in won or p in taken:
+                    continue
+                agv, m = reqs[k]
+                if (m.location_x, m.location_y) in picker_locs:
+                    continue
+                won.add(k); taken.add(p); cg['proposals'] += 1; cg['resolved'] += 1
+                assigned_pickers[p] = Mission(MissionType.PICKING, m.location_id, m.location_x, m.location_y, t)
+                picker_locs.add((m.location_x, m.location_y))
+        for agv, m in (assigned_agvs.items() if method != 'cbaa' else ()):
             if m.mission_type not in (MissionType.PICKING, MissionType.RETURNING):
                 continue
             if (m.location_x, m.location_y) in picker_locs:
@@ -343,8 +485,39 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
             actions[agv] = m.location_id if not agv.busy else 0
         for p, m in assigned_pickers.items():
             actions[p] = m.location_id
-        rewards = env.step(list(actions[a] for a in agents))[1]
+        cg['active_missions'] += len(assigned_agvs)
+        ia, ip = sum(a not in assigned_agvs for a in agvs), sum(p not in assigned_pickers for p in pickers)
+        cg['agv_idle_steps'] += ia; cg['picker_idle_steps'] += ip                 # robot without a task
+        cg['ts_agv_idle'].append(ia); cg['ts_picker_idle'].append(ip)
+        cg['ts_proposals'].append(cg['proposals']); cg['ts_refusals'].append(cg['refusals'])  # cumulative
+        for agv, m in assigned_agvs.items():
+            if m.mission_type == MissionType.PICKING and agv not in task:
+                task[agv] = dict(start=m.assigned_time, deliv=None, agv_wait=0, picker_wait=0)
+            if agv not in task or m.mission_type not in (MissionType.PICKING, MissionType.RETURNING):
+                continue
+            needs = (m.mission_type == MissionType.PICKING and not agv.carrying_shelf) or \
+                    (m.mission_type == MissionType.RETURNING and agv.carrying_shelf)
+            if not needs:
+                continue
+            here = [p for p, mp in assigned_pickers.items()
+                    if (mp.location_x, mp.location_y) == (m.location_x, m.location_y) and (p.x, p.y) == (m.location_x, m.location_y)]
+            if m.at_location and not here:
+                task[agv]['agv_wait'] += 1                         # AGV at the shelf, no Picker there
+            elif here and not m.at_location:
+                task[agv]['picker_wait'] += 1                      # Picker at the shelf, AGV not there
+        cg['picking_missions'] += sum(m.mission_type == MissionType.PICKING for m in assigned_agvs.values())
+        cg['wait_for_picker'] += sum(                              # AGV at its shelf, waiting to be loaded/unloaded
+            1 for agv, m in assigned_agvs.items() if m.at_location and (
+                (m.mission_type == MissionType.PICKING and not agv.carrying_shelf) or
+                (m.mission_type == MissionType.RETURNING and agv.carrying_shelf)))
+        _, rewards, _, _, info = env.step(list(actions[a] for a in agents))
         deliveries += sum(1 for rv in rewards[:u.num_agvs] if rv > 0.5)
+        cg['clashes'] += info['clashes']; cg['stucks'] += info['stucks']; cg['agv_idle'] += info['agvs_idle_time']
+        for k, rv in enumerate(rewards[:u.num_agvs]):
+            if rv > 0.5 and agents[k] in pick_start:
+                cg['cycle'].append(t + 1 - pick_start.pop(agents[k]))  # pickup mission assigned -> shelf delivered
+            if rv > 0.5 and agents[k] in task:
+                task[agents[k]]['deliv'] = t + 1
 
         # learning step of the coordinator
         if coord is not None:
@@ -361,17 +534,23 @@ def run_episode(method, scale, seed, T, params=None, reward='pair', r=C.PROX_R, 
                 coord.step(obs, jac, 0.05, delivery=sum(1 for rv in rewards[:u.num_agvs] if rv > 0.5), pred_jac=pred)
             A = coord.A.copy(); W = coord.W.copy()
             n_links, w_m = coord.ne_h[-1], coord.W_mean_h[-1]
-        elif method == 'full':
-            n_links, w_m = N * (N - 1) // 2, 1.0
+        elif method in ('full', 'uniform', 'cbaa'):
+            n_links, w_m = N * (N - 1) // 2, (w_uniform if method == 'uniform' else 1.0)
         else:
             n_links, w_m = int(A.sum() // 2), 0.0
         deliv_h.append(deliveries); link_h.append(n_links); w_mean_h.append(w_m)
 
+        if slow_mask is not None and method == 'dmorph' and t % 25 == 24:
+            sm = slow_mask(t); pk_idx = [agent_idx[p.id] for p in pickers]
+            fast_i = [q for q in pk_idx if not sm[q]]; slow_i = [q for q in pk_idx if sm[q]]
+            gap_h.append(float(np.mean([W[agent_idx[a.id], fast_i].mean() - W[agent_idx[a.id], slow_i].mean() for a in agvs])))
+
         if recorder is not None:
             recorder(t=t, env=u, agents=agents, coordinator=coord, A=A, W=W, deliveries=deliveries,
-                     assigned_agvs=assigned_agvs, assigned_pickers=assigned_pickers)
+                     assigned_agvs=assigned_agvs, assigned_pickers=assigned_pickers, slow_mask=slow_mask)
 
     env.close()
     zone = {k: v[0] / v[1] for k, v in shift_state['zone_share'].items()} if shift_state else None
     return dict(deliveries=np.array(deliv_h), links=np.array(link_h), w_mean=np.array(w_mean_h),
-                coordinator=coord, agents=agents, stats=stats, zone_share=zone)
+                coordinator=coord, agents=agents, stats=stats, zone_share=zone, congestion=cg,
+                selection=sel, pref_gap=gap_h)
